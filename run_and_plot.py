@@ -16,7 +16,8 @@ from analysis_tools import (
 # -----------------------------------------------------------------------------
 plt.rcParams.update({
     'font.family': 'sans-serif',
-    'font.sans-serif': ['Arial', 'Helvetica', 'SimHei', 'Microsoft YaHei', 'DejaVu Sans'],
+    'font.sans-serif': ['DejaVu Sans', 'Arial', 'Helvetica', 'Microsoft YaHei', 'SimHei'],
+    'mathtext.fontset': 'dejavusans',
     'axes.unicode_minus': False,
     'font.size': 10,
     'axes.labelsize': 11,
@@ -27,9 +28,9 @@ plt.rcParams.update({
     'figure.titlesize': 15,
     'grid.linestyle': '--',
     'grid.alpha': 0.22,
-    'axes.facecolor': '#f8fafc',
+    'axes.facecolor': '#ffffff',
     'figure.facecolor': '#ffffff',
-    'axes.edgecolor': '#cbd5e1',
+    'axes.edgecolor': '#94a3b8',
     'axes.linewidth': 1.0,
     'lines.solid_capstyle': 'round',
     'savefig.dpi': 350,
@@ -512,7 +513,7 @@ def generate_nature_fig4():
     ax_a.plot(distances, e_tot_list, linestyle='-', marker='o', color=THEME['primary'],
               linewidth=2.2, markersize=4.5, markerfacecolor='white', label=r'RHF Total Energy $E_{\mathrm{tot}}$')
     ax_a.axvline(x=r_eq, color=THEME['rose'], linestyle='--', alpha=0.85, linewidth=1.4,
-                 label=fr'Equilibrium Bond $R_e \approx {r_eq:.2f}\mathrm{{ Bohr}}$ ({r_eq*0.529177:.2f} Å)')
+                 label=fr'Equilibrium Bond $R_e \approx {r_eq:.2f}\mathrm{{ Bohr}}$ ({r_eq*0.529177:.2f} $\mathrm{{\AA}}$)')
     ax_a.scatter([r_eq], [e_min], color=THEME['rose'], s=80, zorder=5)
     
     ax_a.set_xlabel(r'Internuclear Distance $R$ (Bohr)')

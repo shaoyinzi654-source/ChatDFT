@@ -25,7 +25,7 @@ st.markdown("""
     .stApp {
         background-color: #f8fafc;
         color: #1e293b;
-        font-family: 'Times New Roman', 'SimSun', 'SimHei', -apple-system, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Microsoft YaHei", sans-serif;
     }
     
     /* 标题样式 */
