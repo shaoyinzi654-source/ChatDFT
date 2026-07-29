@@ -1,9 +1,13 @@
+import os
 import openai
 from openai import OpenAI
 
+api_key = os.getenv("OPENAI_API_KEY", "")
+base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+
 client = OpenAI(
-    api_key="sk-omWl5smTaCBOrRalgbbBk09Migy7e1w1J9raZXRDYjkzDfoY",
-    base_url="https://tokken.cc/v1"
+    api_key=api_key if api_key else "placeholder-key",
+    base_url=base_url
 )
 
 def test_api():

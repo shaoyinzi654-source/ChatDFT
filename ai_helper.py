@@ -1,11 +1,15 @@
 import json
+import os
 import re
 from openai import OpenAI
 
-# Initialize the OpenAI client with the provided credentials
+# Read API credentials securely from environment variables
+api_key = os.getenv("OPENAI_API_KEY", "")
+base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+
 client = OpenAI(
-    api_key="sk-omWl5smTaCBOrRalgbbBk09Migy7e1w1J9raZXRDYjkzDfoY",
-    base_url="https://tokken.cc/v1"
+    api_key=api_key if api_key else "placeholder-key",
+    base_url=base_url
 )
 
 SYSTEM_PROMPT = """You are an expert quantum chemist and AI assistant. Your task is to translate a user's natural language request for a DFT (Density Functional Theory) or Hartree-Fock calculation into a structured JSON configuration that our calculation engines can run.
