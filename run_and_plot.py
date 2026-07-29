@@ -33,7 +33,7 @@ from analysis_tools import (
 )
 
 # ===========================================================================
-# Global Publication Aesthetic Configuration — Nature / Science Standard
+# Global Publication Aesthetic Configuration - Nature / Science Standard
 # ===========================================================================
 plt.rcParams.update({
     'font.family':          'sans-serif',
@@ -172,7 +172,7 @@ def generate_fig1():
     fig = plt.figure(figsize=(16, 12))
     gs = GridSpec(3, 2, figure=fig, hspace=0.55, wspace=0.38)
     suptitle_fig(fig, "Figure 1  |  1D Kohn-Sham DFT: Ground-State Electronic Structure",
-                 "Self-consistent field solution · LDA functional · Soft-Coulomb interaction")
+                 "Self-consistent field solution | LDA functional | Soft-Coulomb interaction")
 
     x  = res_he['x']
     rho = res_he['density']
@@ -363,7 +363,7 @@ def generate_fig2():
     fig = plt.figure(figsize=(14, 10.5))
     gs = GridSpec(2, 2, figure=fig, hspace=0.42, wspace=0.35)
     suptitle_fig(fig, r"Figure 2  |  H$_2$ Molecular Electron Density & Charge Density Difference",
-                 "STO-3G RHF  ·  Equilibrium bond length  $R_e = 1.40\,{\\rm Bohr}$  $(0.74\,{\\rm\AA})$")
+                 "STO-3G RHF | Equilibrium bond length $R_e = 1.40\\,{\\rm Bohr}$ ($0.74\\,{\\rm\\AA}$)")
 
     # ---- Panel A: 3D Volumetric Density --------------------------------------
     ax_a = fig.add_subplot(gs[0, 0], projection='3d')
@@ -519,7 +519,7 @@ def generate_fig3():
     fig, axes = plt.subplots(2, 2, figsize=(14, 10.5))
     fig.subplots_adjust(hspace=0.48, wspace=0.38)
     suptitle_fig(fig, "Figure 3  |  Electronic Spectroscopy, DOS/PDOS, IR Spectrum & Electrostatic Potential",
-                 r"H$_2$ STO-3G RHF  ·  Gaussian broadening $\sigma = 0.04$ Ha  ·  Lorentzian IR profiles")
+                 r"H$_2$ STO-3G RHF | Gaussian broadening $\sigma = 0.04$ Ha | Lorentzian IR profiles")
 
     # ---- Panel A: DOS & PDOS ------------------------------------------------
     ax_a = axes[0, 0]
@@ -706,7 +706,7 @@ def generate_fig4():
     fig, axes = plt.subplots(2, 2, figsize=(14, 10.5))
     fig.subplots_adjust(hspace=0.48, wspace=0.38)
     suptitle_fig(fig, "Figure 4  |  Potential Energy Surface, Energy Decomposition & Chemical Bonding",
-                 r"H$_2$ STO-3G RHF  ·  Bond dissociation  ·  Orbital evolution")
+                 r"H$_2$ STO-3G RHF | Bond dissociation | Orbital evolution")
 
     # ---- Panel A: PES + Morse Fit -------------------------------------------
     ax_a = axes[0, 0]
@@ -850,7 +850,7 @@ def generate_fig5():
     fig = plt.figure(figsize=(16, 12))
     gs = GridSpec(3, 2, figure=fig, hspace=0.58, wspace=0.42)
     suptitle_fig(fig, "Figure 5  |  Multi-Molecule Comparative Electronic Structure Analysis",
-                 r"STO-3G RHF  ·  H$_2$  ·  N$_2$  ·  LiF  ·  CO (proxy)  ·  Mulliken & Wiberg analysis")
+                 r"STO-3G RHF | H$_2$ | N$_2$ | LiF | CO (proxy) | Mulliken & Wiberg analysis")
 
     mols_all  = ['H$_2$', 'N$_2$', 'LiF', 'CO']
     e_tots    = [-1.1175, -92.4396, -90.0361, -111.225]
@@ -1116,7 +1116,7 @@ def generate_fig6():
 def generate_all():
     print()
     print("=" * 70)
-    print("  ChatDFT — Nature/Science Publication-Grade Figure Generation")
+    print("  ChatDFT - Nature/Science Publication-Grade Figure Generation")
     print("=" * 70)
     print()
     generate_fig1()
@@ -1127,7 +1127,7 @@ def generate_all():
     generate_fig6()
     print()
     print("=" * 70)
-    print("  SUCCESS — All 6 Nature composite figure plates generated!")
+    print("  SUCCESS - All 6 Nature composite figure plates generated!")
     print("=" * 70)
     print()
 

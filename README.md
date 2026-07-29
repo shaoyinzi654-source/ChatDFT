@@ -41,7 +41,7 @@
 
 ---
 
-### Figure 1 — 1D Kohn-Sham DFT 求解器与 SCF 收敛动力学（6 子图）
+### Figure 1 — 1D Kohn-Sham DFT 求解器与 SCF 收敛动力学
 
 <div align="center">
   <img src="nature_fig1_dft_solver.png" alt="Figure 1: 1D KS-DFT Solver" width="100%" />
@@ -59,7 +59,7 @@
 
 ---
 
-### Figure 2 — H₂ 分子电子密度与差分电荷密度（4 子图）
+### Figure 2 — H₂ 分子电子密度与差分电荷密度
 
 <div align="center">
   <img src="nature_fig2_h2_density.png" alt="Figure 2: H2 Density & CDD" width="100%" />
@@ -75,7 +75,7 @@
 
 ---
 
-### Figure 3 — 电子光谱、态密度 DOS/PDOS、IR 光谱与静电势（4 子图）
+### Figure 3 — 电子光谱、态密度 DOS/PDOS、IR 光谱与静电势
 
 <div align="center">
   <img src="nature_fig3_spectroscopy.png" alt="Figure 3: Spectroscopy & MEP" width="100%" />
@@ -91,7 +91,7 @@
 
 ---
 
-### Figure 4 — 势能面扫描、能量分解与化学键分析（4 子图）
+### Figure 4 — 势能面扫描、能量分解与化学键分析
 
 <div align="center">
   <img src="nature_fig4_pes_energetics.png" alt="Figure 4: PES & Bonding" width="100%" />
@@ -107,7 +107,7 @@
 
 ---
 
-### Figure 5 — 多分子电子结构横向对比分析（6 子图）
+### Figure 5 — 多分子电子结构横向对比分析
 
 <div align="center">
   <img src="nature_fig5_multi_molecule.png" alt="Figure 5: Multi-Molecule Comparison" width="100%" />
@@ -125,7 +125,7 @@
 
 ---
 
-### Figure 6 — 1D 周期性 Kronig-Penney 晶体电子结构（4 子图）
+### Figure 6 — 1D 周期性 Kronig-Penney 晶体电子结构
 
 <div align="center">
   <img src="nature_fig6_periodic_crystal.png" alt="Figure 6: Periodic Crystal" width="100%" />
