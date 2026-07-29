@@ -109,6 +109,29 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+def polish_3d_figure(fig, height=540):
+    """Apply one consistent, high-contrast style to interactive 3D figures."""
+    axis_style = dict(
+        showbackground=True,
+        backgroundcolor="#f5f7fb",
+        gridcolor="#d8e0ea",
+        zerolinecolor="#b7c3d0",
+        showspikes=False,
+        title_font=dict(size=12, color="#26384a"),
+    )
+    fig.update_layout(
+        template="plotly_white",
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
+        font=dict(family="Inter, Segoe UI, sans-serif", color="#26384a", size=12),
+        margin=dict(l=0, r=0, t=42, b=0),
+        height=height,
+        legend=dict(bgcolor="rgba(255,255,255,0.86)", bordercolor="#d8e0ea", borderwidth=1),
+    )
+    fig.update_scenes(xaxis=axis_style, yaxis=axis_style, zaxis=axis_style,
+                      camera=dict(eye=dict(x=1.55, y=1.55, z=1.15)))
+    return fig
+
 # 安全计算用户输入的物理势能表达式
 def make_potential_fn(expr_str):
     allowed_names = {
@@ -747,6 +770,7 @@ with col_info:
             height=260,
             showlegend=False
         )
+        polish_3d_figure(fig_prev, height=330)
         st.plotly_chart(fig_prev, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1254,6 +1278,7 @@ if solver_mode == "3d_md":
                     zaxis=dict(title="Z (Å)", range=[0, bl])
                 )
             )
+            polish_3d_figure(fig_3d)
             st.plotly_chart(fig_3d, use_container_width=True)
             
         with md_tab2:
@@ -2034,6 +2059,7 @@ if res is not None:
                     margin=dict(l=0, r=0, t=30, b=0),
                     height=500
                 )
+                polish_3d_figure(fig_3d_cdd)
                 st.plotly_chart(fig_3d_cdd, use_container_width=True)
                 
                 st.info("💡 **学术图表分析**：在双原子核正中间（图2蓝色区域和图3蓝色3D包络面，$\\Delta\\rho > 0$），代表电子发生了向键合中心的显著转移，形成了坚固的**化学共价键**；原子核周围和外侧（红色区域，$\\Delta\\rho < 0$），对应电子的耗尽区。")

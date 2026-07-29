@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from dft_engine import solve_1d_dft
 from diatomic_engine import solve_diatomic_scf, STO3GOrbital
-from analysis_tools import calculate_dos, calculate_pdos_3d, calculate_cdd_3d, eval_density_2d, calculate_cdd_2d
+from analysis_tools import calculate_dos, calculate_pdos_3d, calculate_cdd_3d, eval_density_2d, calculate_cdd_2d, eval_density_3d_grid
 
 # Configure scientific publication-quality plotting style (SCI style) with Chinese support
 plt.rcParams.update({
@@ -16,10 +16,69 @@ plt.rcParams.update({
     'ytick.labelsize': 10,
     'figure.titlesize': 14,
     'grid.linestyle': '--',
-    'grid.alpha': 0.4,
+    'grid.alpha': 0.22,
+    'axes.facecolor': '#f7f9fc',
+    'figure.facecolor': 'white',
+    'axes.edgecolor': '#b8c2d1',
+    'axes.linewidth': 0.8,
+    'lines.solid_capstyle': 'round',
     'savefig.dpi': 300,
     'savefig.bbox': 'tight'
 })
+
+PALETTE = {
+    'navy': '#17324d',
+    'teal': '#087f8c',
+    'coral': '#e76f51',
+    'gold': '#e9a23b',
+    'blue': '#277da1',
+    'ink': '#263238',
+}
+
+def generate_3d_density_plot(res_mol, atoms):
+    """Create a readable 3D density surface for the README and examples."""
+    from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+
+    y = np.linspace(-2.8, 2.8, 100)
+    z = np.linspace(-3.8, 3.8, 120)
+    Y, Z = np.meshgrid(y, z)
+    X = np.zeros_like(Y)
+    rho = eval_density_3d_grid(res_mol, X, Y, Z)
+    rho = np.maximum(rho, 0.0)
+    levels = np.percentile(rho[rho > 0], [55, 72, 86, 95])
+
+    fig = plt.figure(figsize=(10, 7), facecolor='white')
+    ax = fig.add_subplot(111, projection='3d')
+    ax.set_facecolor('#f7f9fc')
+    for level, alpha in zip(levels, [0.12, 0.2, 0.3, 0.42]):
+        surface = np.ma.masked_less(rho, level)
+        ax.plot_surface(Z, Y, surface, cmap='viridis', alpha=alpha,
+                        linewidth=0, antialiased=True, vmin=0, vmax=np.max(rho))
+
+    for idx, atom in enumerate(atoms):
+        pos = atom['pos']
+        color = '#d9e2ec' if atom['name'].upper() == 'H' else PALETTE['coral']
+        ax.scatter([pos[2]], [pos[1]], [np.max(rho) * 0.02], s=150,
+                   color=color, edgecolor=PALETTE['ink'], linewidth=1.2,
+                   depthshade=True, label=f"{atom['name']} {idx + 1}")
+    ax.plot([atoms[0]['pos'][2], atoms[1]['pos'][2]],
+            [atoms[0]['pos'][1], atoms[1]['pos'][1]],
+            [np.max(rho) * 0.02] * 2, color=PALETTE['coral'], linewidth=3,
+            label='H-H bond')
+
+    ax.set_title('H2 electron density | 3D density surface', pad=18,
+                 fontsize=15, color=PALETTE['ink'], weight='bold')
+    ax.set_xlabel('Bond axis z (Bohr)', labelpad=9)
+    ax.set_ylabel('Transverse y (Bohr)', labelpad=9)
+    ax.set_zlabel('Density rho (e/Bohr^3)', labelpad=9)
+    ax.view_init(elev=25, azim=-58)
+    ax.set_box_aspect((1.35, 1.0, 0.72))
+    ax.grid(True, alpha=0.18)
+    ax.legend(loc='upper left', frameon=True, facecolor='white', edgecolor='#d6dee8')
+    fig.tight_layout()
+    fig.savefig('h2_density_3d.png', dpi=240, bbox_inches='tight')
+    plt.close(fig)
+    print("Saved 'h2_density_3d.png'")
 
 def generate_academic_plots():
     print("Running calculations and generating SCI publication-grade plots (including atomic structures)...")
@@ -87,6 +146,7 @@ def generate_academic_plots():
     # ----------------------------------------------------
     print("Generating H2 2D Charge Density Difference (CDD) contour plot with atoms...")
     atoms = [{"name": atom1_name, "pos": atom1_pos}, {"name": atom2_name, "pos": atom2_pos}]
+    generate_3d_density_plot(res_mol, atoms)
     cdd_2d, _, _ = calculate_cdd_2d(atoms, num_electrons, res_mol, Y, Z)
     
     fig, ax = plt.subplots(figsize=(7.5, 6))

@@ -4,7 +4,7 @@
 
 ### 用自然语言探索 DFT、Hartree-Fock 与分子电子结构
 
-一个基于 Streamlit 的交互式量子化学计算与可视化工具。输入想研究的体系，配置计算参数，运行自洽场计算，并在浏览器中查看轨道、电子密度、能量和势能面结果。
+一个基于 Streamlit 的交互式量子化学计算与可视化工具。输入想研究的体系，配置计算参数，运行自洽场计算，并在浏览器中查看轨道、电子密度、能量和势能面结果。所有关键图表都支持缩放、旋转、悬停读数和导出。
 
 <p>
   <a href="https://github.com/shaoyinzi654-source/ChatDFT"><strong>GitHub</strong></a>
@@ -33,13 +33,22 @@
 | 🧪 1D Kohn-Sham DFT | 网格有限差分、Hartree 势、LDA 交换-相关泛函与密度混合 |
 | ⚛️ 3D STO-3G Hartree-Fock | 支持 H、He 及双原子分子，解析计算重叠、动能、核吸引和 ERI |
 | 📈 PES 扫描 | 扫描 H₂、HeH⁺ 的键长并定位最低能量平衡构型 |
+| 🧊 3D 电子云 | 交互式 3D 电子密度等值面、原子核、化学键和偶极矩预览 |
+| 🔴🔵 差分电荷 | 2D 等高线与 3D 正负等值面，观察成键区域的电子富集和耗尽 |
 | 📊 结果可视化 | 查看轨道、电子密度、有效势、能量分解、SCF 收敛和 DOS/PDOS |
+| 🧬 多原子分析 | Mulliken 电荷、键级、MO/AO 系数、几何结构和键长信息 |
+| 🔭 光谱与响应 | DOS/PDOS、红外振动频率、振动强度、静电势和能带式能级图 |
+| 🧭 几何与动力学 | 多原子几何优化、3D 分子动力学轨迹、温度、RDF 和 MSD 分析 |
 
 ## 计算结果预览
 
 <div align="center">
   <img src="dft_results.png" alt="DFT calculation results" width="48%" />
   <img src="dft_orbitals.png" alt="DFT orbitals" width="48%" />
+</div>
+
+<div align="center">
+  <img src="h2_density_3d.png" alt="H2 three-dimensional electron density" width="88%" />
 </div>
 
 <div align="center">
@@ -87,6 +96,16 @@ Calculate the potential energy surface scan of H2
 ```
 
 也可以直接从预设模板选择体系，再调整电子数、网格范围、收敛阈值、键长和 SCF 迭代次数。
+
+## 一次计算能看到什么
+
+1. **体系设置**：自然语言解析、原子坐标编辑器、电子数、自旋多重度和收敛参数。
+2. **结构预览**：实时 3D 分子构型，显示原子、键线和计算得到的偶极矩方向。
+3. **SCF 诊断**：总能量收敛曲线、每次迭代能量变化和最终收敛状态。
+4. **电子结构**：HOMO/LUMO、轨道能级、MO/AO 系数矩阵、轨道占据和能隙。
+5. **空间分布**：一维剖面、二维切片、3D 电子云等值面和 3D 差分电荷等值面。
+6. **化学解释**：Mulliken 原子电荷、键级/键强度、DOS/PDOS、静电势与成键分析。
+7. **分子性质**：势能面、几何优化、振动频率、红外强度和分子动力学统计量。
 
 ## 项目结构
 
