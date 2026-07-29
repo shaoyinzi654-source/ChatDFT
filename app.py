@@ -317,13 +317,13 @@ if "last_solver_type" not in st.session_state:
 if "auto_optimize" not in st.session_state:
     st.session_state.auto_optimize = False
 
-# ----------------- 侧边栏：AI 智能助手模型选择 -----------------
-st.sidebar.markdown("### 🤖 AI 智能模型选择")
+# ----------------- 侧边栏：参数解析模型选择 -----------------
+st.sidebar.markdown("### ⚙️ 参数解析模型选择")
 ai_model_select = st.sidebar.selectbox(
-    "选择 AI 翻译模型 (Tokken.cc)",
+    "选择配置解析模型",
     options=["gpt-5.6-luna", "gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet", "deepseek-chat"],
     index=0,
-    help="您可以选择更强大的大语言模型来翻译和解析您的自然语言指令。"
+    help="选择配置解析引擎以自动生成求解参数。"
 )
 
 # ----------------- 侧边栏：手动参数调节面板 -----------------
@@ -674,16 +674,16 @@ col_prompt, col_info = st.columns([2, 1])
 
 with col_prompt:
     st.markdown('<div class="academic-card">', unsafe_allow_html=True)
-    st.markdown("### 📋 物理计算体系智能设置 (AI翻译输入)")
+    st.markdown("### 📋 物理计算体系智能设置")
     user_prompt = st.text_area(
-        "请在此用中文描述您想要计算和分析的量子物理系统（AI将自动翻译为底层求解参数，例如：'模拟一个包含4个电子的谐振子量子点势能阱'，或者'扫描H2分子的基态能量分布'）：",
+        "请在此描述您想要计算和分析的量子物理系统（将自动转换为底层求解参数，例如：'模拟一个包含4个电子的谐振子量子点势能阱'，或者'扫描H2分子的基态能量分布'）：",
         placeholder="例如：建立一个一维H2分子模型，两个核吸引势中心间距为3.0 Bohr，电子数为2...",
         key="user_prompt_text_area"
     )
     
     col_btn1, col_btn2 = st.columns([1, 1])
     with col_btn1:
-        ai_submit = st.button("✨ 运行 AI 一键计算", key="btn_ai_calc_plain")
+        ai_submit = st.button("✨ 一键智能计算", key="btn_ai_calc_plain")
     with col_btn2:
         manual_submit = st.button("🏃 直接运行当前手动设置", key="btn_manual_calc_plain")
     st.markdown('</div>', unsafe_allow_html=True)
@@ -1036,7 +1036,7 @@ if load_clicked:
 # 触发计算控制
 run_now = False
 if ai_submit and user_prompt:
-    with st.spinner(f"AI ({ai_model_select}) 正在根据指令解析参数并生成物理配置..."):
+    with st.spinner(f"正在根据指令解析参数并生成物理配置..."):
         ai_res = parse_user_request(user_prompt, model_name=ai_model_select)
         st.session_state.config = ai_res
         st.session_state.calc_results = None
@@ -1046,7 +1046,7 @@ if ai_submit and user_prompt:
         # 同步更新侧边栏 Widget 状态
         sync_config_to_sidebar_state()
         
-        st.success(f"AI ({ai_model_select}) 成功设置模拟参数！")
+        st.success(f"成功解析并设置模拟参数！")
         run_now = True
         
         # Check if AI requested structure optimization auto-trigger

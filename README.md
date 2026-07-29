@@ -30,7 +30,7 @@
 > - 🔬 **1D Kohn-Sham 密度泛函理论 (KS-DFT)**：有限差分求解、Pulay DIIS 自洽场加速、LDA 交换相关泛函、周期性晶体
 > - ⚛️ **3D STO-3G Roothaan-Hall Hartree-Fock**：完整解析 ERI 积分、多原子体系支持
 > - 📊 **全套量子化学分析工具**：DOS/PDOS、CDD、MEP、IR 光谱、键级分析、Mulliken 电荷、分子动力学 MD
-> - 🤖 **自然语言 AI 助手**：LLM 参数智能解析，零编码门槛操作计算配置
+> - 🧠 **智能参数解析器**：自动参数转换与计算配置生成，方便快捷操作物理计算
 > - 🖥️ **Streamlit 交互界面**：Plotly 3D 等值面、实时参数调节、一键高清导出
 
 ---
@@ -145,7 +145,7 @@
 
 | 模块 | 物理模型 / 算法 | 核心物理量输出 | 可视化方式 |
 |---|---|---|---|
-| 🤖 **AI 自然语言助手** | LLM JSON 参数解析器 | 自然语言→结构化计算配置 | 实时参数识别与调节 |
+| 🧠 **智能配置解析器** | 自动配置映射器 | 交互描述→结构化计算配置 | 实时参数识别与调节 |
 | 🧪 **1D KS-DFT 引擎** | 有限差分 KS 方程、LDA、Pulay DIIS | ρ(x), ψ_n, ε_n, V_eff, E_tot | 密度、轨道、收敛曲线 |
 | 🔄 **SCF 加速器** | Linear / Pulay DIIS 密度混合 | 迭代步数、残差 |ΔE|、混合系数 | 对数收敛对比动力学 |
 | ⚛️ **3D Hartree-Fock** | STO-3G Roothaan-Hall RHF/UHF | F, S, C, ε, E_tot, μ | 3D 分子结构与偶极矢量 |
@@ -362,9 +362,9 @@ python run_and_plot.py
 python validate_all.py
 ```
 
-### 5. AI 助手调用示例
+### 5. 智能计算指令示例
 
-在 Streamlit 界面中，你可以用自然语言描述计算任务：
+在 Streamlit 界面中，你可以输入想要计算与分析的物理体系描述：
 
 ```
 帮我计算氢分子在不同键长下的能量，扫描从 0.5 到 4.0 Bohr，画出势能面
@@ -381,7 +381,7 @@ python validate_all.py
 ```text
 ChatDFT/
 ├── app.py                       # Streamlit 主界面 + Plotly 3D 交互面板
-│   ├── AI 自然语言参数解析入口
+│   ├── 智能参数解析接口
 │   ├── 1D KS-DFT / 3D HF 交互控制
 │   └── 分析工具可视化 (DOS, CDD, MEP, MD)
 ├── dft_engine.py                # 1D Kohn-Sham DFT 核心求解器
@@ -399,7 +399,7 @@ ChatDFT/
 │   ├── calculate_cdd_2d/3d()    # 差分电荷密度
 │   ├── eval_density_2d/3d()     # 2D/3D 电子密度网格评估
 │   └── calculate_mep_grid_2d()  # 分子静电势
-├── ai_helper.py                 # LLM 自然语言→计算配置解析器
+├── ai_helper.py                 # 智能计算配置解析与参数映射工具
 ├── md_engine.py                 # 分子动力学引擎 (Velocity Verlet, NVT)
 ├── run_and_plot.py              # 350 DPI Nature 组图批量生成脚本 (6 plates)
 ├── validate_all.py              # 全量物理正确性单元测试套件 (16 tests)
@@ -481,5 +481,5 @@ pdos1, pdos2 = calculate_pdos_3d(result['eps'], result['C'], result['S'], E_grid
 ---
 
 <div align="center">
-  <sub>Built with ❤️ | ChatDFT — Quantum Chemistry Meets Interactive AI</sub>
+  <sub>ChatDFT — Quantum Chemistry & Simulation Platform</sub>
 </div>
