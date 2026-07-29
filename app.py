@@ -270,7 +270,7 @@ def run_vibrational_analysis(atoms, num_electrons, multiplicity=None):
 
 # 顶部主标题
 st.markdown('<div class="app-title">Chat DFT</div>', unsafe_allow_html=True)
-st.markdown('<div class="app-subtitle">基于自洽密度泛函理论 (DFT) 和量子化学自洽场方法的智能分析与绘图系统</div>', unsafe_allow_html=True)
+st.markdown('<div class="app-subtitle">基于自洽密度泛函理论 (DFT) 和量子化学自洽场方法的演示系统 <span style="background: #fef3c7; color: #b45309; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: bold;">Demo Prototype</span></div>', unsafe_allow_html=True)
 
 def sync_config_to_sidebar_state():
     if "config" in st.session_state and st.session_state.config.get("solver_type") == "3d_diatomic":

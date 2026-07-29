@@ -26,6 +26,9 @@
 
 ---
 
+> ⚠️ **Demo 版本声明 (Demo Notice & Functional Limitations)**
+> 本项目为 **原型演示版本（Proof-of-Concept Demo）**，主要用于展示 1D/3D 量子化学自洽场计算算法（KS-DFT 与 RHF）及可视化流程。底层求解模型包含一定物理简化，**功能尚欠缺且不完善**，不建议直接用于生产级或高精度科研生产计算。
+
 > **ChatDFT** 是一个完整的 **量子化学计算 + 交互式可视化** 系统，内置了从第一原理出发的电子结构引擎：
 > - 🔬 **1D Kohn-Sham 密度泛函理论 (KS-DFT)**：有限差分求解、Pulay DIIS 自洽场加速、LDA 交换相关泛函、周期性晶体
 > - ⚛️ **3D STO-3G Roothaan-Hall Hartree-Fock**：完整解析 ERI 积分、多原子体系支持
@@ -471,6 +474,22 @@ pdos1, pdos2 = calculate_pdos_3d(result['eps'], result['C'], result['S'], E_grid
 4. **Slater, J. C.** (1951). A Simplification of the Hartree-Fock Method. *Physical Review*, 81(3), 385.
 5. **Mulliken, R. S.** (1955). Electronic Population Analysis on LCAO-MO Molecular Wave Functions. *Journal of Chemical Physics*, 23(10), 1833.
 6. **Kronig, R. de L. & Penney, W. G.** (1931). Quantum Mechanics of Electrons in Crystal Lattices. *Proceedings of the Royal Society*, 130(814), 499.
+
+---
+
+## ⚠️ Demo 版本局限性与功能欠缺说明 (Limitations & Disclaimer)
+
+由于本项目定位为 **概念验证与教学演示版本 (Demo Version)**，当前引擎与系统功能仍存在以下欠缺与限制：
+
+1. **基组与模型简化**：
+   - **3D Hartree-Fock**：当前仅内置最小基组 **STO-3G**，未添加极化函数 (p/d) 及弥散函数 (diffuse functions)，对重元素或阴离子体系精度不足。
+   - **1D KS-DFT**：模型采用 **Soft-Coulomb** 势与 Slater-Wigner 1D LDA 泛函近似，仅适用于一维模型体系的教学展示。
+2. **电子相关效应 (Post-HF)**：
+   - 引擎目前仅支持单参考态自洽场 (RHF/UHF)，**未接入高阶电子相关方法**（如 MP2、CCSD(T) 或 CASSCF）。
+3. **计算规模与性能**：
+   - 核心积分计算全采用纯 Python / NumPy 实现，未进行 C++/CUDA 硬件加速，对大规模分子体系（>50 电子）求解性能较低。
+4. **缺失高级分析功能**：
+   - 尚不支持过渡态自动搜索 (TS Search)、频域解析 Hessian 矩阵计算及高阶色散力修正 (DFT-D3/D4)。
 
 ---
 
