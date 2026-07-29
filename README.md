@@ -2,21 +2,21 @@
 
 # ⚛️ ChatDFT
 
-### 顶级 Nature 期刊出版级 · 交互式量子化学与电子结构自洽场计算分析系统
-**Nature-Grade Interactive Quantum Chemistry · Kohn-Sham DFT · Hartree-Fock SCF Simulation Platform**
+### 交互式量子化学与电子结构自洽场计算分析系统
+**Interactive Quantum Chemistry · Kohn-Sham DFT · Hartree-Fock SCF Simulation Platform**
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.40%2B-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io)
 [![NumPy](https://img.shields.io/badge/NumPy-Scientific-013243?logo=numpy&logoColor=white)](https://numpy.org)
 [![SciPy](https://img.shields.io/badge/SciPy-Linalg-8CAAE6?logo=scipy&logoColor=white)](https://scipy.org)
 [![Plotly](https://img.shields.io/badge/Plotly-3D%20Viz-3F4F75?logo=plotly&logoColor=white)](https://plotly.com)
-[![Matplotlib](https://img.shields.io/badge/Matplotlib-Nature%20Pub-11557c)](https://matplotlib.org)
+[![Matplotlib](https://img.shields.io/badge/Matplotlib-Plotting-11557c)](https://matplotlib.org)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Benchmark](https://img.shields.io/badge/Tests-16%2F16%20PASS-brightgreen)]()
 
 <p>
   <a href="https://github.com/shaoyinzi654-source/ChatDFT"><strong>📦 GitHub Repository</strong></a> ·
-  <a href="#️-figure-plates-展厅"><strong>🖼 Nature 组图展厅</strong></a> ·
+  <a href="#️-figure-plates-展厅"><strong>🖼 组图展厅</strong></a> ·
   <a href="#-完整物理理论推导"><strong>📐 理论推导</strong></a> ·
   <a href="#-benchmark-验证基准"><strong>🧪 物理验证</strong></a> ·
   <a href="#-快速开始"><strong>🚀 快速开始</strong></a>
@@ -37,7 +37,7 @@
 
 ## 🖼️ Figure Plates 展厅
 
-系统使用 `run_and_plot.py` 生成 **6 组 350 DPI Nature 期刊标准出版级复合组图**，覆盖电子结构计算的全部核心物理量与分析维度。
+系统使用 `run_and_plot.py` 生成 **6 组 350 DPI 高清出版级复合组图**，覆盖电子结构计算的全部核心物理量与分析维度。
 
 ---
 
@@ -348,7 +348,7 @@ python -m streamlit run app.py
 > python -m streamlit run app.py
 > ```
 
-### 3. 生成全部 6 组 Nature 期刊组图
+### 3. 生成全部 6 组高清组图
 
 ```bash
 python run_and_plot.py
@@ -401,7 +401,7 @@ ChatDFT/
 │   └── calculate_mep_grid_2d()  # 分子静电势
 ├── ai_helper.py                 # 智能计算配置解析与参数映射工具
 ├── md_engine.py                 # 分子动力学引擎 (Velocity Verlet, NVT)
-├── run_and_plot.py              # 350 DPI Nature 组图批量生成脚本 (6 plates)
+├── run_and_plot.py              # 350 DPI 高清组图批量生成脚本 (6 plates)
 ├── validate_all.py              # 全量物理正确性单元测试套件 (16 tests)
 ├── requirements.txt             # Python 依赖包清单
 ├── nature_fig1_dft_solver.png   # Fig 1: 1D KS-DFT Solver (6-panel, 3×2)
