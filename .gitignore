@@ -4,4 +4,4 @@ __pycache__/
 .env.*
 streamlit*.log
 .streamlit/secrets.toml
-
+.mpl_cache/
