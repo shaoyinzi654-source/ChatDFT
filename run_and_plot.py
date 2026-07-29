@@ -377,12 +377,9 @@ def generate_fig2():
     rho3 = np.maximum(eval_density_3d_grid(res, X3, Y3, Z3), 0.0)
     rmax = rho3.max()
 
-    levels_3d = np.percentile(rho3[rho3 > 1e-6], [50, 72, 88, 96])
-    alphas_3d = [0.12, 0.22, 0.38, 0.60]
-    for lv, al in zip(levels_3d, alphas_3d):
-        surf = np.ma.masked_less(rho3, lv)
-        ax_a.plot_surface(Z3, Y3, surf, cmap='plasma', alpha=al,
-                          linewidth=0, antialiased=True, vmin=0, vmax=rmax)
+    # Clean, smooth 3D surface plot of electron density rho(y,z) with floor projection
+    surf = ax_a.plot_surface(Z3, Y3, rho3, cmap='plasma', rstride=1, cstride=1,
+                             linewidth=0, antialiased=True, alpha=0.88, vmin=0, vmax=rmax)
 
     # Bond axis line
     ax_a.plot([p1z, p2z], [0, 0], [rmax*0.02, rmax*0.02],
@@ -915,9 +912,10 @@ def generate_fig5():
     ax_d.grid(True, axis='y')
 
     # horizontal reference lines for single/double/triple bond
+    ax_d.set_xlim(-0.55, 3.65)
     for bo_ref, label in [(1.0, 'Single'), (2.0, 'Double'), (3.0, 'Triple')]:
         ax_d.axhline(bo_ref, color='#94a3b8', lw=1.0, ls='--', alpha=0.6)
-        ax_d.text(3.55, bo_ref + 0.04, label, fontsize=8, color='#64748b')
+        ax_d.text(3.20, bo_ref + 0.04, label, fontsize=8, color='#64748b')
 
     # ---- Panel E: Mulliken Atomic Charges ------------------------------------
     ax_e = fig.add_subplot(gs[2, 0])
