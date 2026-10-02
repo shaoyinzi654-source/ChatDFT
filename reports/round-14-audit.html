@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChatDFT 审计 · 第 14 轮 — UV-Vis 吸收谱的绝对标度</title>
+<style>
+  :root {
+    --ink: #1b1f24; --muted: #5b6570; --line: #e2e6ea; --bg: #ffffff;
+    --soft: #f6f8fa; --warn: #9a5b00; --warnbg: #fdf3e3;
+    --ok: #1a7f37; --okbg: #eaf6ec; --bad: #b42318; --badbg: #fdeceb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.65 -apple-system, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", Roboto, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 28px 80px; }
+  h1 { font-size: 27px; margin: 0 0 6px; letter-spacing: -.2px; }
+  .sub { color: var(--muted); margin: 0 0 34px; font-size: 14px; }
+  h2 { font-size: 19px; margin: 42px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 26px 0 8px; }
+  p { margin: 10px 0; }
+  code { background: var(--soft); padding: 1px 5px; border-radius: 4px;
+    font-family: "SFMono-Regular", Consolas, monospace; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0;
+    font-size: 14px; }
+  th, td { text-align: left; padding: 9px 11px; border: 1px solid var(--line);
+    vertical-align: top; }
+  th { background: var(--soft); font-weight: 600; }
+  td.n { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    white-space: nowrap; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 12px; font-weight: 600; }
+  .t-ok { background: var(--okbg); color: var(--ok); }
+  .t-bad { background: var(--badbg); color: var(--bad); }
+  .note { background: var(--warnbg); border-left: 3px solid #f0c99a;
+    padding: 10px 14px; margin: 16px 0; font-size: 14px; }
+  .quote { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    background: var(--soft); padding: 10px 12px; border-radius: 6px;
+    overflow-x: auto; margin: 10px 0; color: #333; }
+  ul { padding-left: 22px; } li { margin: 5px 0; }
+  .kpi { display: flex; gap: 14px; flex-wrap: wrap; margin: 18px 0 4px; }
+  .kpi div { flex: 1 1 150px; border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 14px; background: var(--soft); }
+  .kpi b { display: block; font-size: 21px; }
+  .kpi span { font-size: 12.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>第 14 轮：UV-Vis 吸收谱的绝对标度与展宽约定</h1>
+<p class="sub">第 12 轮的教训是「归一化过的图会掩盖绝对标度错误」。电子吸收谱里有一模一样的
+结构：曲线被归一化到自己的最大值，所以一个错误的雅可比因子、一个缺失的高斯归一化常数、
+一个错十倍的单位换算，三种错误在图上<strong>看起来完全一样</strong>。</p>
+
+<div class="kpi">
+  <div><b>4.00 : 1</b><span>等 f 双峰被画成的比例（应为 1 : 1）</span></div>
+  <div><b>19.75×</b><span>雅可比因子在 180–800 nm 上的变化幅度</span></div>
+  <div><b>0.000 %</b><span>修正后 ∫ε dν 求和规则残差</span></div>
+  <div><b>0 / 6</b><span>乙烯前 6 个根落在旧默认窗口内</span></div>
+  <div><b>39 → 43</b><span>contract 检查段（+4 段）</span></div>
+  <div><b>9</b><span>本轮我自己的错误</span></div>
+</div>
+
+<h2>一、发现并修掉的问题</h2>
+
+<h3>1. 曲线带了一个 |dE/dλ| 雅可比因子</h3>
+<p>旧代码在波长网格上把谱写成 <code>y *= EV2NM / wl**2</code>。这个因子守恒的是图的
+<strong>面积</strong>，不是吸光度；它让整条谱被乘以一个随波长下降的函数，在 180–800 nm 上
+变化 <code>(800/180)² = 19.75</code> 倍。</p>
+<p>后果是<strong>相对峰高被系统性扭曲</strong>。两个 f 相同、能量宽度相同的带，画出来应该
+一样高；实测：</p>
+<table>
+<thead><tr><th>两条等 f 带的位置</th><th>旧代码（带雅可比）</th><th>修正后</th><th>应为</th></tr></thead>
+<tbody>
+<tr><td class="n">250 nm / 500 nm</td><td class="n">4.002 : 1</td><td class="n">1.000 : 1</td><td class="n">1 : 1</td></tr>
+<tr><td class="n">200 nm / 600 nm</td><td class="n">8.89 : 1</td><td class="n">1.00 : 1</td><td class="n">1 : 1</td></tr>
+</tbody>
+</table>
+<p>为什么雅可比是错的：Beer–Lambert 的 ε(λ) 是<em>在 λ 处取值的谱密度</em>，带高只由 f 和
+能量宽度决定。面积守恒是另一个量，它的正确归宿是「对波数积分」，也就是现在单独报告的
+<code>sum_rule</code>。展宽仍然在能量空间做——这一点旧代码是对的，错的只是额外乘了
+一个因子。</p>
+<div class="note">旧注释写着这个因子是为了「让画出来的带形是对的」。它恰恰<em>改变</em>了带形。
+一个平滑因子乘上去，就是把整条谱压斜。</div>
+
+<h3>2. 高斯没有单位面积归一化，纵轴不在任何绝对标度上</h3>
+<p>旧代码用幅度为 f 的高斯，少了 <code>1/(σ√(2π))</code>。因为最后一步是
+<code>y / y.max() * 100</code>，这个缺失<strong>完全看不见</strong>——实测把三种 FWHM 下
+归一化前后的曲线逐点相减，最大差 <code>1.4e-14</code>。但少了它，曲线下面积就等于
+Σf 乘以一个任意的带宽，求和规则根本无法陈述。</p>
+
+<h3>3. 默认窗口 180–800 nm 对小分子是空的</h3>
+<p>这是最容易被当成「正常」的一条：图能画出来，看起来像一条谱。实测前 6 个激发态落在
+默认窗口内的个数：</p>
+<table>
+<thead><tr><th>分子</th><th>S1–S6 范围</th><th>落在 180–800 nm 内</th></tr></thead>
+<tbody>
+<tr><td>乙烯</td><td class="n">97.6 – 145.8 nm</td><td><span class="tag t-bad">0 / 6</span></td></tr>
+<tr><td>甲醛</td><td class="n">106.1 – 301.4 nm</td><td><span class="tag t-bad">1 / 6</span></td></tr>
+<tr><td>萘（contract 用的分子）</td><td class="n">含 220 nm 强带</td><td><span class="tag t-ok">在窗口内</span></td></tr>
+</tbody>
+</table>
+<p>旧的 contract 断言「曲线峰位必须落在最强态波长的 6 nm 内」之所以一直通过，只是因为
+测试分子恰好是萘。换成乙烯这条断言会失败——但没有人换过。现在窗口默认<strong>从态自身
+导出</strong>：在能量空间取 <code>max(3σ, 0.5 eV)</code> 的边距，再夹到 100–1100 nm。
+乙烯得到 113.4–154.7 nm，6 个带全部在内。</p>
+
+<h3>4. 没有任何绝对标度</h3>
+<p>论文表格里引的是 ε<sub>max</sub>（L mol⁻¹ cm⁻¹），旧 payload 只有 0–100 的相对曲线。
+现在曲线同时给出相对与绝对两套纵坐标，峰表多一列 ε<sub>max</sub>，界面加了一个
+「Relative / ε」切换。</p>
+
+<h3>5. 没有说明这几个根占了多少振子强度</h3>
+<p>Thomas–Reiche–Kuhn 求和规则说 Σf（对<em>全部</em>跃迁）等于电子数。实测 10 个根
+只拿到：甲醛 <code>Σf/Ne = 0.0628</code>，乙烯 <code>0.0643</code>。也就是约 6%。
+一个 6 根的 stick list 会被读成「完整的光谱」，现在 payload 和叙述都会写明这个比例。</p>
+
+<h3>6. 顺带发现：两个前端库被加载了两次</h3>
+<p><code>3Dmol-min.js</code> 与 <code>chart.umd.min.js</code> 在 <code>&lt;head&gt;</code>
+里加载一次（离线内置那次修复），在 <code>app.js</code> 前又加载一次。表现上不出错——两次
+求值都在建图之前，第二个 <code>window.Chart</code> 覆盖第一个——但约 700 KB 被下载、
+解析、求值两遍，而且两个 Chart 注册表是分开的：用第一个 Chart 类建的图，第二个类的
+<code>Chart.getChart()</code> 找不到。已删除重复标签，并给 <code>check_selectors</code>
+加了一条重复 <code>&lt;script src&gt;</code> 检查。</p>
+
+<h2>二、ε ↔ f 常数：从第一性原理推，而不是抄</h2>
+<p>第 12 轮的教训之一是常数容易差一个 ln 10。所以这次的常数不引用文献，而是自己推，再用
+一个独立的物理量对一次。</p>
+<div class="quote">f                = (2/3) ΔE |μ|²                        （原子单位）
+∫σ dν            = e²/(4 ε₀ mₑ c) · f                  （SI，ν 单位 Hz）
+ε                = N_A σ / (1000 ln 10)                （L mol⁻¹ cm⁻¹）
+⇒ ∫ε dν̃          = 2.3154e8 · f                        （L mol⁻¹ cm⁻²）</div>
+<table>
+<thead><tr><th>校验</th><th>本实现</th><th>独立值</th><th>偏差</th></tr></thead>
+<tbody>
+<tr><td>常数（课本 f = 4.319e-9 ∫ε dν̃）</td><td class="n">2.315351e8</td><td class="n">2.315350e8</td><td class="n">−0.002 %</td></tr>
+<tr><td>氢 Ly-α 的 Einstein A₂₁</td><td class="n">6.2617e8 s⁻¹</td><td class="n">6.2649e8 s⁻¹</td><td class="n">−0.051 %</td></tr>
+</tbody>
+</table>
+<p>第二条是真正独立的：A₂₁ 与 f₁₂ 都是文献值，走 f → A 这条完全不同的路径，能复现到
+0.05%，说明常数里没有藏 2π 或 ln 10。</p>
+<p>绝对值也算得对：单带 f = 1、FWHM 0.40 eV 时解析值
+<code>2.3154e8 / (σ_cm √(2π)) = 67419.7</code> L mol⁻¹ cm⁻¹，实测 67420.2（网格分辨率）；
+乙烯 S2（f = 0.5536）实测峰高 <code>3.732e4</code>。</p>
+
+<h2>三、求和规则：这次的可检验不变量</h2>
+<p>展宽用单位面积高斯 + 上面的换算之后，有一个<strong>精确</strong>不变量：曲线对波数的
+积分等于换算常数乘以 Σf。只算落在窗口内的那部分，所以期望值带一个显式的覆盖率因子
+（正态 CDF 之差），不是拍一个系数。</p>
+<table>
+<thead><tr><th>单带位置</th><th>∫ε dν̃ 实测</th><th>2.3154e8 × Σf</th><th>比值</th></tr></thead>
+<tbody>
+<tr><td class="n">250 nm</td><td class="n">2.315400e8</td><td class="n">2.315400e8</td><td class="n">1.000000</td></tr>
+<tr><td class="n">400 nm</td><td class="n">2.315400e8</td><td class="n">2.315400e8</td><td class="n">1.000000</td></tr>
+<tr><td class="n">600 nm</td><td class="n">2.315400e8</td><td class="n">2.315400e8</td><td class="n">1.000000</td></tr>
+<tr><td class="n">乙烯 S2（经 API）</td><td class="n">1.282e8</td><td class="n">1.282e8</td><td class="n">残差 0.000 %</td></tr>
+</tbody>
+</table>
+<p>这个量能抓到的错误：缺 <code>1/(σ√(2π))</code>、多一个雅可比、换算常数错、网格太粗。
+抓不到的：常数整体错一个因子（因为分子分母同时缩放）——那由上面那条<strong>字面常数</strong>
+断言负责。</p>
+
+<h2>四、变异测试：7 个变异，全部触发</h2>
+<p>每条新断言都要证明它能失败。做法是把 <code>analysis.py</code> 一次改坏一处，跑
+<strong>真正的</strong> <code>contract.uv_scale_sections</code>（为此把这四段从
+<code>main()</code> 里抽成了独立函数，否则变异测试要跑 5 次完整 contract 门）。</p>
+<table>
+<thead><tr><th>变异</th><th>模拟的错误</th><th>触发的断言</th></tr></thead>
+<tbody>
+<tr><td class="n">M1</td><td>把雅可比加回纵轴</td><td>等 f 等高峰 <span class="tag t-bad">FAIL</span>（另 2 条）</td></tr>
+<tr><td class="n">M2</td><td>去掉单位面积因子</td><td>绝对标度 + 求和规则 <span class="tag t-bad">FAIL</span>（带形那条正确地<em>不</em>报错）</td></tr>
+<tr><td class="n">M3</td><td>常数改成 2.3154e9</td><td>绝对标度 <span class="tag t-bad">FAIL</span></td></tr>
+<tr><td class="n">M4</td><td>默认窗口改回 180–800 nm</td><td>窗口含带 <span class="tag t-bad">FAIL</span></td></tr>
+<tr><td class="n">M5</td><td>永不发窗口警告</td><td>窗口含带 <span class="tag t-bad">FAIL</span></td></tr>
+<tr><td class="n">M6</td><td>峰表 ε<sub>max</sub> 填相对值</td><td>绝对标度 <span class="tag t-bad">FAIL</span></td></tr>
+<tr><td class="n">M7</td><td>手写一个假的积分值</td><td>求和规则 <span class="tag t-bad">FAIL</span></td></tr>
+<tr><td class="n">M8</td><td>index.html 重新重复加载 chart.umd</td><td>重复 script src <span class="tag t-bad">FAIL</span></td></tr>
+</tbody>
+</table>
+<div class="note"><strong>M3 第一次是「触发 0 条」。</strong>原因是我写的断言把期望值
+<em>从被测的那个常数算出来</em>：把模块里的 <code>EPS_INTEGRAL_PER_F</code> 乘 10，
+期望值跟着乘 10，检查照样通过。这正是我自己技能库里记的 Trap 23「守卫重算了它要守卫的
+东西」。修法是在 contract 里写字面常数，并加一条「模块常数是否仍等于字面值」的断言。</div>
+
+<h2>五、本轮我自己的错误（9 条）</h2>
+<ol>
+<li><strong>守卫重算被测对象</strong>（M3 触发 0 条），如上。已改成字面常数。</li>
+<li><strong>探针单位写反</strong>：绝对标度那段把 <code>EPS/EV2CM</code> 写成了
+<code>EPS*EV2CM</code>，ε<sub>max</sub> 大了 6500 万倍。是解析值
+<code>67419.7</code> 对不上才发现的。</li>
+<li><strong>探针里 trapz 符号</strong>：ν̃ = 1e7/λ 随 λ 递减，积分出负值。改成先
+<code>argsort</code> 再积分，而不是取绝对值（取绝对值会把符号错误藏起来）。</li>
+<li><strong>断言在错的量上</strong>：第一版要求 <code>expected/常数 = 1</code>，但 400 nm
+的带被自动窗口截掉一点，覆盖率是 0.9973，于是一条正确的实现被报成失败。改成要求
+<code>covered_fraction = 1</code>（显式给一个 200–900 nm 的宽窗口）。</li>
+<li><strong>浏览器门里 <code>or "hidden"</code></strong>：<code>classList.remove</code>
+之后 class 属性是空串，<code>"" or "hidden"</code> 得到 <code>"hidden"</code>，等待循环
+空转满 7 分钟，然后报告「图没显示」——而它背后的图已经画好了。改成 <code>or ""</code>，
+该门从 7m22s 降到 26s。</li>
+<li><strong>表头大小写</strong>：CSS 把 <code>&lt;th&gt;</code> 转成大写，<code>inner_text</code>
+返回的是「ΕMAX」（大写 epsilon），按小写 ε 匹配会失败。改成大小写无关。</li>
+<li><strong>断言测到的是四舍五入</strong>：相对曲线 payload 保留 3 位小数，尾部被舍成
+0.000，绝对曲线保留 4 位仍非零，于是「两条曲线只差一个常数」这条在尾部失败。改成只在
+相对值 &gt; 1%（191 个点）上比较。</li>
+<li><strong>叙述断言了没测过的结论</strong>：求和规则那句原本无论残差多大都以「所以展宽、
+单位换算和网格一致」结尾。改成按实测残差分支（Trap 28）。</li>
+<li><strong>门控计数多算一条</strong>：<code>gates.py</code> 的 <code>_BAD</code> 正则把门自己
+打印的「3 FAILURES: …」当成第四条失败，让我去找一个不存在的缺陷。已排除带冒号的计数行。</li>
+</ol>
+<p>（上表 9 条，其中第 1 条同时是 M3 的教训；本轮<em>产品代码</em>里由我自己引入的错误是 5 条。）</p>
+
+<h2>六、改动清单</h2>
+<table>
+<thead><tr><th>文件</th><th>改动</th></tr></thead>
+<tbody>
+<tr><td class="n">backend/engine/analysis.py</td><td>去掉雅可比；单位面积高斯；<code>EPS_INTEGRAL_PER_F</code> / <code>EV2CM</code> 常数与推导注释；<code>uv_curve</code> 自动窗口 + 绝对 ε + <code>sum_rule</code> + <code>notes</code>；<code>_norm_cdf</code></td></tr>
+<tr><td class="n">backend/server.py</td><td>把电子数传给 <code>uv_curve</code>；JobRequest 增加 <code>uv_fwhm_ev</code> / <code>uv_wmin</code> / <code>uv_wmax</code></td></tr>
+<tr><td class="n">backend/contract.py</td><td>4 个新检查段（等 f 等高峰、绝对标度、求和规则、窗口含带）+ 原有 UV 段的端到端断言；抽出 <code>uv_scale_sections()</code></td></tr>
+<tr><td class="n">backend/agent/planner.py</td><td>叙述报告窗口、ε<sub>max</sub>、Σf/Ne、求和规则残差（按实测分支）</td></tr>
+<tr><td class="n">backend/browser_uv.py</td><td>新增浏览器门（22 条检查）：窗口、求和规则、两套纵坐标、峰表列</td></tr>
+<tr><td class="n">backend/mutate_uv.py</td><td>新增变异测试驱动（8 个变异）</td></tr>
+<tr><td class="n">backend/gates.py</td><td>注册 <code>browser_uv</code>；修正失败计数多算一条</td></tr>
+<tr><td class="n">backend/check_selectors.py</td><td>新增重复 <code>&lt;script src&gt;</code> 检查</td></tr>
+<tr><td class="n">frontend/static/index.html</td><td>纵坐标切换按钮、<code>#uvNote</code>、ε<sub>max</sub> 列；删除重复的两个库标签</td></tr>
+<tr><td class="n">frontend/static/js/app.js</td><td><code>renderUvCurve</code> 支持两套纵坐标；新增 <code>renderUvNote</code>；峰表 ε<sub>max</sub> 列；切换事件</td></tr>
+<tr><td class="n">frontend/static/css/app.css</td><td><code>.seg</code> 分段按钮与 <code>.btn.tiny.active</code></td></tr>
+<tr><td class="n">probe_uv.py, probe_uv2.py</td><td>本轮探针（形状、求和规则、常数推导、窗口覆盖）</td></tr>
+</tbody>
+</table>
+
+<h2>七、门控结果</h2>
+<p>主套件（10 门，自有服务器）<strong>10/10 通过，exit 0，17m29s</strong>：</p>
+<table>
+<thead><tr><th>门</th><th>结果</th><th>检查数</th></tr></thead>
+<tbody>
+<tr><td class="n">check_selectors</td><td><span class="tag t-ok">PASS</span></td><td class="n">1（含新的重复 script 检查）</td></tr>
+<tr><td class="n">check_library</td><td><span class="tag t-ok">PASS</span></td><td class="n">63</td></tr>
+<tr><td class="n">agent.designer</td><td><span class="tag t-ok">PASS</span></td><td class="n">97</td></tr>
+<tr><td class="n">contract</td><td><span class="tag t-ok">PASS</span></td><td class="n"><strong>43</strong>（上轮 39，+4 段）</td></tr>
+<tr><td class="n">selftest</td><td><span class="tag t-ok">PASS</span></td><td class="n">10</td></tr>
+<tr><td class="n">sweep</td><td><span class="tag t-ok">PASS</span></td><td class="n">76</td></tr>
+<tr><td class="n">check_series</td><td><span class="tag t-ok">PASS</span></td><td class="n">16</td></tr>
+<tr><td class="n">check_fields</td><td><span class="tag t-ok">PASS</span></td><td class="n">13</td></tr>
+<tr><td class="n">check_nto</td><td><span class="tag t-ok">PASS</span></td><td class="n">14</td></tr>
+<tr><td class="n">check_reaction</td><td><span class="tag t-ok">PASS</span></td><td class="n">52</td></tr>
+</tbody>
+</table>
+<p>四个新检查段在 contract 里的输出：</p>
+<div class="quote">[PASS] the UV-Vis curve is computed, labelled and not shifted by its broadening
+[PASS] equal oscillator strength means equal band height
+[PASS] the absolute eps scale is the derived one
+[PASS] integral(eps dnu) equals 2.3154e8 * sum(f)
+[PASS] the plotted window contains the bands it is meant to show</div>
+<p>浏览器门 <code>browser_uv</code>（新增）<strong>22/22 通过，26s</strong>。乙烯实测：
+窗口 113.4–154.7 nm（来自态自身）、最强带 S2 @ 137.9 nm（f = 0.5536）、
+ε<sub>max</sub> = 3.732e4 L mol⁻¹ cm⁻¹、∫ε dν 残差 0.000%、
+Σf = 0.5536 占 TRK 求和规则的 3.5%、两套纵坐标逐点只差一个常数（191 个有效点上最大偏差
+3.7e-4）。</p>
+<p>另外三个浏览器门复跑 <strong>3/3 通过，exit 0，3m19s</strong>
+（browser_design 25 / browser_series 12 / browser_scan 12）——因为这一轮动了
+<code>index.html</code> 和 <code>app.js</code>，必须确认没有回归。</p>
+<p>合计：主套件 17m29s + 浏览器 26s + 3m19s = <strong>21m14s</strong>，
+14 个门全部通过。</p>
+
+<h2>八、仍然缺的论文图</h2>
+<ul>
+  <li><strong>NMR 化学位移（GIAO）</strong>：这个 PySCF 构建里没有 <code>pyscf.prop</code>，
+      需要自己写 GIAO 张量。工作量最大的一项。</li>
+  <li><strong>Raman 谱</strong>：可以用有限场极化率 + 有限差分做（约 36N 次 SCF），
+      与已有的解析 Hessian 配合，属于可做。</li>
+  <li><strong>ESP / MK 电荷</strong>：在格点上拟合，<code>pyscf.tools.cubegen</code> 已有，
+      缺的是拟合步骤。</li>
+  <li><strong>def2 / cc-pVDZ 的频率标度因子</strong>：CCCBDB 没有对应值，目前不加标度
+      并在 payload 里明说。</li>
+  <li>vibrations / dos 两个面板的自动切换只有静态检查，没有浏览器门（scan 有）。</li>
+</ul>
+
+<h2>九、待清理（等你确认）</h2>
+<ul>
+  <li><code>data/nci_test</code> 约 30 MB</li>
+  <li><code>build/</code> + <code>tools/</code> 约 2 GB</li>
+  <li><code>data/designs</code> 里 44 个过期文件</li>
+</ul>
+
+</main>
+</body>
+</html>

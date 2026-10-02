@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChatDFT &mdash; Conversational Density Functional Theory</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/css/app.css">
+<!-- Vendored on purpose.  These two used to come from a CDN, which meant the
+     3D viewer and every chart were blank on a machine with no internet or a
+     filtered proxy, and the page blocked on a third party before its own
+     DOMContentLoaded fired.  They are ~700 KB together and make ChatDFT work
+     offline. -->
+<script src="/static/vendor/3Dmol-min.js"></script>
+<script src="/static/vendor/chart.umd.min.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <svg viewBox="0 0 40 40" class="logo" aria-hidden="true">
+      <circle cx="20" cy="20" r="6" fill="var(--accent)"/>
+      <ellipse cx="20" cy="20" rx="17" ry="6.5" fill="none" stroke="var(--accent-2)" stroke-width="1.6"/>
+      <ellipse cx="20" cy="20" rx="17" ry="6.5" fill="none" stroke="var(--accent-3)" stroke-width="1.6"
+               transform="rotate(60 20 20)"/>
+      <ellipse cx="20" cy="20" rx="17" ry="6.5" fill="none" stroke="var(--accent-4)" stroke-width="1.6"
+               transform="rotate(120 20 20)"/>
+    </svg>
+    <div>
+      <h1>ChatDFT</h1>
+      <p class="tagline">Conversational density functional theory</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="engine-pill" id="aiPill" title="Which language model plans your requests">
+      <span class="dot" id="aiDot"></span>
+      <span id="aiText">checking model&hellip;</span>
+    </div>
+    <div class="engine-pill" id="enginePill">
+      <span class="dot" id="engineDot"></span>
+      <span id="engineText">connecting&hellip;</span>
+    </div>
+    <button class="btn ghost" id="btnHelp" title="Help">?</button>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- ============ LEFT: chat ============ -->
+  <section class="panel chat-panel">
+    <div class="panel-head">
+      <h2>Assistant</h2>
+      <button class="btn tiny ghost" id="btnClear">Clear</button>
+    </div>
+
+    <div class="chat-scroll" id="chatScroll">
+      <div class="msg assistant">
+        <div class="bubble">
+          <p>I am <strong>ChatDFT</strong>. I plan and run real density functional
+          theory calculations and explain what the numbers mean.</p>
+          <p>Try one of these:</p>
+          <div class="suggestions" id="suggestions">
+            <button class="chip" data-q="Optimize the geometry of benzene with B3LYP/6-31G*">Optimise benzene</button>
+            <button class="chip" data-q="What is the HOMO-LUMO gap of pyridine at PBE0/def2-TZVP?">Pyridine gap</button>
+            <button class="chip" data-q="Compute the first 6 excited states of formaldehyde with TD-DFT">Formaldehyde UV-Vis</button>
+            <button class="chip" data-q="Compare phenol and aniline">Phenol vs aniline</button>
+            <button class="chip" data-q="Compare the HOMO-LUMO gaps of benzene, pyridine, furan and pyrrole">4-molecule series</button>
+            <button class="chip" data-q="What is the energy barrier of the ethane torsion?">Ethane torsion barrier</button>
+            <button class="chip" data-q="Plot the ELF of the water molecule">ELF of water</button>
+            <button class="chip" data-q="Explain what a basis set is">What is a basis set?</button>
+            <button class="chip" data-q="Design 6 amine molecules for CO2 capture with molecular weight below 250">Design a molecule</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <form class="composer" id="composer">
+      <textarea id="input" rows="1" placeholder="Ask for a calculation&hellip;  (Enter to send, Shift+Enter for a new line)"></textarea>
+      <button class="btn primary send" id="btnSend" type="submit" title="Send">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M3 20l18-8L3 4v6l12 2-12 2z" fill="currentColor"/></svg>
+      </button>
+    </form>
+
+    <div class="settings-strip">
+      <label>Functional
+        <select id="selFunctional"></select>
+      </label>
+      <label>Basis
+        <select id="selBasis"></select>
+      </label>
+      <label>Charge
+        <input type="number" id="inpCharge" value="0" step="1">
+      </label>
+      <label>Spin
+        <select id="inpMult">
+          <option value="1">singlet</option>
+          <option value="2">doublet</option>
+          <option value="3">triplet</option>
+          <option value="4">quartet</option>
+          <option value="5">quintet</option>
+          <option value="6">sextet</option>
+          <option value="7">septet</option>
+        </select>
+      </label>
+    </div>
+  </section>
+
+  <!-- ============ CENTRE: viewer ============ -->
+  <section class="panel viewer-panel">
+    <div class="panel-head">
+      <h2>Structure</h2>
+      <div class="viewer-tools">
+        <span class="meta" id="molMeta">no structure</span>
+        <div class="seg" id="styleSeg">
+          <button class="seg-btn active" data-style="ballstick">Ball &amp; stick</button>
+          <button class="seg-btn" data-style="stick">Stick</button>
+          <button class="seg-btn" data-style="sphere">Spacefill</button>
+          <button class="seg-btn" data-style="line">Wireframe</button>
+        </div>
+        <button class="btn tiny ghost" id="btnSpin" title="Toggle rotation">Spin</button>
+        <button class="btn tiny ghost" id="btnReset" title="Recentre">Centre</button>
+        <button class="btn tiny ghost" id="btnExport" title="Download XYZ">XYZ</button>
+      </div>
+    </div>
+    <div id="viewer" class="viewer">
+      <div class="viewer-empty" id="viewerEmpty">
+        <svg viewBox="0 0 64 64" width="52" height="52" aria-hidden="true">
+          <circle cx="32" cy="32" r="9" fill="none" stroke="currentColor" stroke-width="2"/>
+          <ellipse cx="32" cy="32" rx="27" ry="10" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".55"/>
+          <ellipse cx="32" cy="32" rx="27" ry="10" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".55"
+                   transform="rotate(70 32 32)"/>
+        </svg>
+        <p>Load a molecule or ask for a calculation<br>to see the 3D structure here.</p>
+      </div>
+    </div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <!-- ============ RIGHT: results ============ -->
+  <section class="panel results-panel">
+    <div class="panel-head">
+      <h2>Results</h2>
+      <div class="tabs" id="resultTabs">
+        <button class="tab active" data-tab="properties">Properties</button>
+        <button class="tab" data-tab="series">Series</button>
+        <button class="tab" data-tab="design">Design</button>
+        <button class="tab" data-tab="orbitals">Orbitals</button>
+        <button class="tab" data-tab="spectrum">UV-Vis</button>
+        <button class="tab" data-tab="vibrations">Vibrations</button>
+        <button class="tab" data-tab="nmr">NMR</button>
+        <button class="tab" data-tab="dos">DOS</button>
+        <button class="tab" data-tab="scan">Scan</button>
+        <button class="tab" data-tab="reaction">Reaction</button>
+        <button class="tab" data-tab="surfaces">Surfaces</button>
+        <button class="tab" data-tab="fields">Fields</button>
+        <button class="tab" data-tab="nci">NCI</button>
+        <button class="tab" data-tab="geometry">Geometry</button>
+        <button class="tab" data-tab="narrative">Analysis</button>
+      </div>
+    </div>
+
+    <div class="results-body" id="resultsBody">
+
+      <div class="tab-pane active" data-pane="properties">
+        <div class="empty-state" id="emptyProps">
+          <p>No results yet. Start a calculation and the electronic structure
+          summary will appear here.</p>
+        </div>
+        <div id="propContent" class="hidden">
+          <div class="job-status" id="jobStatus">
+            <div class="bar"><div class="fill" id="jobBar"></div></div>
+            <span id="jobStage">idle</span>
+          </div>
+          <div class="stat-grid" id="statGrid"></div>
+          <div class="card">
+            <h3>Dipole moment</h3>
+            <div id="dipoleBlock" class="dipole-block"></div>
+          </div>
+          <div class="card">
+            <h3>Atomic charges <span class="hint">Mulliken (solid) &middot; L&ouml;wdin (faded) &middot; Hirshfeld (dotted), in units of e</span></h3>
+            <div id="chargeBlock" class="charge-list"></div>
+            <p class="muted hidden" id="hirshfeldNote"></p>
+          </div>
+          <div class="card">
+            <h3>Bonds <span class="hint">Mayer bond orders, from the total density matrix</span></h3>
+            <div class="table-wrap"><table id="mayerTable"></table></div>
+            <p class="muted hidden" id="mayerNote"></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="series">
+        <div class="empty-state" id="emptySeries">
+          <p>Name three or more molecules in one request &mdash; for example
+          &ldquo;compare the HOMO-LUMO gaps of benzene, pyridine, furan and
+          pyrrole&rdquo; &mdash; and every one of them is calculated at the
+          same level of theory, then plotted as a trend.</p>
+        </div>
+        <div class="hidden" id="seriesContent">
+          <div class="series-head">
+            <div>
+              <h3 id="seriesTitle">&nbsp;</h3>
+              <p class="series-sub" id="seriesSub"></p>
+            </div>
+            <div class="series-actions">
+              <select id="seriesProp" class="mini-select" aria-label="Property to plot"></select>
+              <button class="btn tiny ghost" id="seriesCsv" type="button">CSV</button>
+            </div>
+          </div>
+          <canvas id="seriesChart" height="300"></canvas>
+          <div class="chart-tools">
+            <button type="button" class="btn tiny ghost" data-export="png" data-chart="seriesChart" data-name="series">PNG</button>
+            <button type="button" class="btn tiny ghost" data-export="csv" data-chart="seriesChart" data-name="series">CSV</button>
+          </div>
+          <div class="series-table-wrap">
+            <table class="series-table" id="seriesTable"></table>
+          </div>
+          <p class="surf-note" id="seriesNote"></p>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="orbitals">
+        <div class="empty-state"><p>Run a single point or an optimisation to populate
+        the Kohn-Sham orbital ladder.</p></div>
+        <div class="hidden" id="orbContent">
+          <canvas id="orbChart" height="260"></canvas>
+          <div class="chart-tools"><button type="button" class="btn tiny ghost" data-export="png" data-chart="orbChart" data-name="orbitals">PNG</button><button type="button" class="btn tiny ghost" data-export="csv" data-chart="orbChart" data-name="orbitals">CSV</button></div>
+          <div id="frontierBlock"></div>
+          <div class="table-wrap"><table id="orbTable"></table></div>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="spectrum">
+        <div class="empty-state"><p>Ask for excited states (for example
+        &ldquo;TD-DFT of formaldehyde&rdquo;) for the absorption curve and the
+        leading transitions.</p></div>
+        <div class="hidden" id="specContent">
+          <div id="uvWrap" class="hidden">
+            <canvas id="uvChart" height="240"></canvas>
+            <div class="chart-tools">
+              <button type="button" class="btn tiny ghost" data-export="png" data-chart="uvChart" data-name="uvvis-spectrum">PNG</button>
+              <button type="button" class="btn tiny ghost" data-export="csv" data-chart="uvChart" data-name="uvvis-spectrum">CSV</button>
+              <span class="seg" id="uvScale">
+                <button type="button" class="btn tiny ghost active" data-uv-scale="relative">Relative</button>
+                <button type="button" class="btn tiny ghost" data-uv-scale="epsilon">&epsilon; (L mol<sup>-1</sup> cm<sup>-1</sup>)</button>
+              </span>
+            </div>
+            <p class="muted" id="uvNote"></p>
+          </div>
+          <canvas id="specChart" height="240"></canvas>
+          <div class="chart-tools">
+            <button type="button" class="btn tiny ghost" data-export="png" data-chart="specChart" data-name="uvvis">PNG</button>
+            <button type="button" class="btn tiny ghost" data-export="csv" data-chart="specChart" data-name="uvvis">CSV</button>
+          </div>
+          <div class="table-wrap"><table id="specTable"></table></div>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="vibrations">
+        <div class="empty-state"><p>Ask for the IR spectrum (for example
+        &ldquo;vibrational frequencies of water&rdquo;) for the harmonic modes,
+        the thermochemistry, and &mdash; for a closed-shell molecule &mdash; the
+        Raman spectrum and depolarization ratios from the same calculation.</p></div>
+        <div class="hidden" id="vibContent">
+          <canvas id="vibChart" height="240"></canvas>
+          <div class="chart-tools">
+            <button type="button" class="btn tiny ghost" data-export="png" data-chart="vibChart" data-name="ir">PNG</button>
+            <button type="button" class="btn tiny ghost" data-export="csv" data-chart="vibChart" data-name="ir">CSV</button>
+          </div>
+          <div id="vibThermo" class="vib-thermo"></div>
+          <div class="table-wrap"><table id="vibTable"></table></div>
+        </div>
+        <!-- Raman.  It shares the Hessian and the displaced geometries with the
+             IR spectrum, so it arrives in the same result -- but it is drawn
+             separately because the interesting thing is usually where the two
+             disagree, and overlaying them on one pair of axes would hide that
+             behind a shared scale. -->
+        <div class="hidden" id="ramanWrap">
+          <h4 class="sub-head">Raman spectrum</h4>
+          <canvas id="ramanChart" height="240"></canvas>
+          <div class="chart-tools">
+            <button type="button" class="btn tiny ghost" data-export="png" data-chart="ramanChart" data-name="raman">PNG</button>
+            <button type="button" class="btn tiny ghost" data-export="csv" data-chart="ramanChart" data-name="raman">CSV</button>
+          </div>
+          <p class="muted" id="ramanNote"></p>
+          <div class="table-wrap"><table id="ramanTable"></table></div>
+        </div>
+        <p class="muted hidden" id="ramanSkip"></p>
+      </div>
+
+      <div class="tab-pane" data-pane="nmr">
+        <div class="empty-state"><p>Ask for the NMR spectrum or the chemical
+        shifts (for example &ldquo;13C NMR of benzene&rdquo;) for the GIAO
+        shielding tensor of every nucleus, the shifts against a reference
+        computed at the same level, and the simulated spectrum.</p></div>
+        <div class="hidden" id="nmrContent">
+          <div id="nmrLevel" class="vib-thermo"></div>
+          <div class="chart-tools">
+            <span class="seg" id="nmrIsotope"></span>
+            <button type="button" class="btn tiny ghost" data-export="png" data-chart="nmrChart" data-name="nmr">PNG</button>
+            <button type="button" class="btn tiny ghost" data-export="csv" data-chart="nmrChart" data-name="nmr">CSV</button>
+          </div>
+          <canvas id="nmrChart" height="240"></canvas>
+          <p class="muted" id="nmrNote"></p>
+          <div class="table-wrap"><table id="nmrTable"></table></div>
+          <h4 class="sub-head">Shielding tensors</h4>
+          <p class="muted" id="nmrTensorNote"></p>
+          <div class="table-wrap"><table id="nmrTensor"></table></div>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="dos">
+        <div class="empty-state"><p>Ask for the density of states (for example
+        &ldquo;DOS of pyridine&rdquo;) for the total and element-projected
+        curves.</p></div>
+        <div class="hidden" id="dosContent">
+          <canvas id="dosChart" height="260"></canvas>
+          <div class="chart-tools">
+            <button type="button" class="btn tiny ghost" data-export="png" data-chart="dosChart" data-name="dos">PNG</button>
+            <button type="button" class="btn tiny ghost" data-export="csv" data-chart="dosChart" data-name="dos">CSV</button>
+          </div>
+          <p class="muted" id="dosNote"></p>
+          <div class="table-wrap"><table id="dosTable"></table></div>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="scan">
+        <div class="empty-state"><p>Ask for a bond scan (for example
+        &ldquo;scan the O-H bond of water&rdquo;) to trace a potential-energy
+        curve.</p></div>
+        <div class="hidden" id="scanContent">
+          <canvas id="scanChart" height="240"></canvas>
+          <div class="chart-tools">
+            <button type="button" class="btn tiny ghost" data-export="png" data-chart="scanChart" data-name="scan">PNG</button>
+            <button type="button" class="btn tiny ghost" data-export="csv" data-chart="scanChart" data-name="scan">CSV</button>
+          </div>
+          <div class="table-wrap"><table id="scanTable"></table></div>
+          <p class="muted hidden" id="scanNote"></p>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="reaction">
+        <div class="empty-state" id="emptyReaction">
+          <p>Ask for a reaction path &mdash; &ldquo;what is the energy barrier
+          of the ethane torsion&rdquo;, &ldquo;transition state of the C&ndash;C
+          rotation in butane&rdquo;, or name the coordinate yourself with
+          &ldquo;torsion 2 1 3 6 of butane&rdquo;. Every point on the curve is a
+          full geometry optimisation with that coordinate held fixed, and the
+          maximum is checked against an analytic Hessian.</p>
+        </div>
+        <div class="hidden" id="reactionContent">
+          <div class="series-head">
+            <div>
+              <h3 id="reactionTitle">&nbsp;</h3>
+              <p class="series-sub" id="reactionSub"></p>
+            </div>
+            <div class="series-actions">
+              <span class="tag tag-ok hidden" id="reactionVerdict"></span>
+              <button class="btn tiny ghost" id="reactionCsv" type="button">CSV</button>
+            </div>
+          </div>
+          <div class="reaction-metrics" id="reactionMetrics"></div>
+          <canvas id="reactionChart" height="300"></canvas>
+          <div class="chart-tools">
+            <button type="button" class="btn tiny ghost" data-export="png" data-chart="reactionChart" data-name="reaction-path">PNG</button>
+            <button type="button" class="btn tiny ghost" data-export="csv" data-chart="reactionChart" data-name="reaction-path">CSV</button>
+          </div>
+          <div class="reaction-body">
+            <div class="table-wrap">
+              <table class="series-table" id="reactionTable"></table>
+            </div>
+            <div class="reaction-side">
+              <h4>Barrier</h4>
+              <div id="reactionBarrier"></div>
+              <h4>Transition state</h4>
+              <div id="reactionTs"></div>
+              <h4>Verification</h4>
+              <div id="reactionCheck"></div>
+            </div>
+          </div>
+          <div class="hidden" id="ircBlock">
+            <h4 class="reaction-h4">Intrinsic reaction coordinate</h4>
+            <p class="series-sub" id="ircSub"></p>
+            <canvas id="ircChart" height="220"></canvas>
+            <div class="chart-tools">
+              <button type="button" class="btn tiny ghost" data-export="png" data-chart="ircChart" data-name="irc">PNG</button>
+              <button type="button" class="btn tiny ghost" id="ircCsv">CSV</button>
+            </div>
+            <p class="surf-note" id="ircNote"></p>
+          </div>
+          <p class="surf-note" id="reactionNote"></p>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="surfaces">
+        <div class="empty-state"><p>Ask for a surface (for example
+        &ldquo;MEP map of water&rdquo; or &ldquo;show me the LUMO of
+        pyridine&rdquo;) to render electrostatic potentials and orbital
+        isosurfaces in the 3D viewer.</p></div>
+        <div class="hidden" id="surfContent">
+          <div class="hidden" id="ntoBlock"></div>
+          <div class="surf-controls">
+            <label class="surf-field">
+              <span>Surface</span>
+              <select id="surfSelect"></select>
+            </label>
+            <label class="surf-field">
+              <span>Isovalue <em id="surfIsoVal">0.032</em></span>
+              <input type="range" id="surfIso" min="0.002" max="0.12"
+                     step="0.002" value="0.032">
+            </label>
+            <label class="surf-field">
+              <span>Opacity <em id="surfOpacityVal">0.85</em></span>
+              <input type="range" id="surfOpacity" min="0.2" max="1"
+                     step="0.05" value="0.85">
+            </label>
+            <label class="surf-check">
+              <input type="checkbox" id="surfBothPhases" checked>
+              <span>Both phases</span>
+            </label>
+          </div>
+          <div id="surfStatus" class="surf-status"></div>
+          <div id="surfLegend" class="surf-legend hidden">
+            <span class="surf-legend-label" id="surfLegendLo"></span>
+            <span class="surf-legend-bar" id="surfLegendBar"></span>
+            <span class="surf-legend-label" id="surfLegendHi"></span>
+          </div>
+          <p class="surf-note" id="surfNote"></p>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="fields">
+        <div class="empty-state" id="emptyFields">
+          <p>Ask for the electron localisation function, the Laplacian of the
+          density, the spin density or a density difference &mdash; for
+          example &ldquo;plot the ELF of benzene&rdquo; &mdash; and the
+          contour map in a plane through the molecule appears here.</p>
+        </div>
+        <div class="hidden" id="fieldContent">
+          <div class="field-head">
+            <div>
+              <h3 id="fieldTitle">&nbsp;</h3>
+              <p class="field-sub" id="fieldSub"></p>
+            </div>
+          </div>
+          <div class="field-controls">
+            <label>Field
+              <select id="fieldKind" class="mini-select"></select>
+            </label>
+            <label>Plane
+              <select id="fieldPlane" class="mini-select">
+                <option value="xy">xy</option>
+                <option value="xz">xz</option>
+                <option value="yz">yz</option>
+              </select>
+            </label>
+            <label>Contours
+              <input type="checkbox" id="fieldContours" checked>
+            </label>
+            <button class="btn tiny ghost" id="fieldRedraw" type="button">Recompute</button>
+            <button class="btn tiny ghost" id="fieldPng" type="button">PNG</button>
+            <button class="btn tiny ghost" id="fieldCsv" type="button">CSV</button>
+          </div>
+          <div class="field-plot">
+            <canvas id="fieldCanvas" width="460" height="460"></canvas>
+            <div class="field-scale">
+              <canvas id="fieldBar" width="260" height="14"></canvas>
+              <div class="field-scale-labels" id="fieldScaleLabels"></div>
+            </div>
+          </div>
+          <p class="surf-note" id="fieldNote"></p>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="nci">
+        <div class="empty-state"><p>Ask for a weak-interaction analysis (for
+        example &ldquo;NCI of the water dimer&rdquo;) for the reduced density
+        gradient plot and its isosurfaces.</p></div>
+        <div class="hidden" id="nciContent">
+          <canvas id="nciChart" height="300"></canvas>
+          <div class="chart-tools">
+            <button type="button" class="btn tiny ghost" data-export="png" data-chart="nciChart" data-name="nci">PNG</button>
+            <button type="button" class="btn tiny ghost" data-export="csv" data-chart="nciChart" data-name="nci">CSV</button>
+          </div>
+          <div class="nci-controls">
+            <label class="surf-field">
+              <span>Isosurface</span>
+              <select id="nciSelect"></select>
+            </label>
+            <label class="surf-field">
+              <span>RDG isovalue <em id="nciIsoVal">0.50</em></span>
+              <input type="range" id="nciIso" min="0.15" max="1.00"
+                     step="0.05" value="0.50">
+            </label>
+            <label class="surf-field">
+              <span>Opacity <em id="nciOpacityVal">0.85</em></span>
+              <input type="range" id="nciOpacity" min="0.2" max="1"
+                     step="0.05" value="0.85">
+            </label>
+          </div>
+          <div id="nciStatus" class="surf-status"></div>
+          <div id="nciSummary" class="nci-summary"></div>
+          <p class="surf-note" id="nciNote"></p>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="design">
+        <div class="empty-state" id="emptyDesign">
+          <p>Ask for a molecule to be designed &mdash; for example &ldquo;design
+          6 amines for CO<sub>2</sub> capture with molecular weight below
+          250&rdquo; &mdash; and the candidates, their descriptors and the DFT
+          results for the best ones will appear here.</p>
+        </div>
+        <div class="hidden" id="designContent">
+          <div class="design-head">
+            <div>
+              <h3 id="designGoal">&nbsp;</h3>
+              <p class="design-sub" id="designSub"></p>
+            </div>
+            <button class="btn tiny ghost" id="designCsv" type="button">CSV</button>
+          </div>
+          <div class="design-targets" id="designTargets"></div>
+          <div class="design-summary" id="designSummary"></div>
+          <div id="designList" class="design-list"></div>
+          <p class="surf-note" id="designNote"></p>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="geometry">
+        <div class="empty-state"><p>Geometry tables appear after a single point
+        or an optimisation.</p></div>
+        <div class="hidden" id="geomContent">
+          <div class="geo-group">
+            <h3>Bond lengths</h3>
+            <div class="table-wrap"><table id="bondTable"></table></div>
+          </div>
+          <div class="geo-group">
+            <h3>Bond angles</h3>
+            <div class="table-wrap"><table id="angleTable"></table></div>
+          </div>
+          <div class="geo-group">
+            <h3>Dihedral angles</h3>
+            <div class="table-wrap"><table id="dihTable"></table></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="narrative">
+        <div class="empty-state"><p>Every completed job writes its own
+        scientific commentary here.</p></div>
+        <div class="hidden" id="narrContent"></div>
+        <div id="reactivityBlock" class="card hidden"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Jobs live in their own full-width panel at the bottom.  They used to
+       sit in a second copy of the chat panel that repeated the same element
+       identifiers (chat scroll, composer, message box and clear button);
+       only the first of each is ever bound, so that panel's composer did
+       nothing and its message list stayed empty. -->
+  <section class="panel jobs-panel">
+    <div class="jobs-strip">
+      <div class="jobs-head">
+        <h3>Jobs</h3>
+        <button class="btn tiny ghost" id="btnClearJobs" type="button">Clear</button>
+      </div>
+      <div class="jobs-list" id="jobsList"></div>
+    </div>
+  </section>
+</main>
+
+<button class="lib-fab" id="btnLib" type="button" title="Open the molecule library">
+  <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true">
+    <circle cx="6" cy="6" r="2.4" fill="currentColor"/>
+    <circle cx="14" cy="13" r="2.4" fill="currentColor"/>
+    <path d="M6 8.4v6.2M14 10.6V4.4M8.4 6h3.2" stroke="currentColor"
+          stroke-width="1.3" fill="none"/>
+  </svg>
+  <span>Library</span>
+</button>
+
+<div class="modal" id="helpModal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>What ChatDFT can do</h3>
+      <button class="btn tiny ghost" id="btnCloseHelp" type="button">Close</button>
+    </div>
+    <div class="modal-body">
+      <p>Type what you want in plain language. The planner reads the request,
+      picks a molecule and a job type, and runs it with PySCF.</p>
+      <p>The planner is a language model when one is configured &mdash; the
+      pill at the top right names it &mdash; and a built-in keyword parser
+      otherwise. Either way every answer says which of the two read your
+      sentence, and if the model could not be reached the reply says why
+      instead of quietly falling back.</p>
+      <ul>
+        <li><b>Single point</b> &mdash; energy, orbitals, dipole, charges.</li>
+        <li><b>Optimisation</b> &mdash; relax the geometry (geomeTRIC).</li>
+        <li><b>Excited states</b> &mdash; TD-DFT (TDA) and a UV-Vis curve.</li>
+        <li><b>Vibrations</b> &mdash; harmonic frequencies, IR spectrum and
+            thermochemistry.</li>
+        <li><b>DOS</b> &mdash; total and element-projected density of states.</li>
+        <li><b>Reactivity</b> &mdash; conceptual DFT descriptors and condensed
+            Fukui functions.</li>
+        <li><b>Surfaces</b> &mdash; MEP map, density and orbital isosurfaces.</li>
+        <li><b>NCI</b> &mdash; reduced density gradient: hydrogen bonds,
+            dispersion contacts and steric clashes.</li>
+        <li><b>Scan</b> &mdash; a rigid bond scan, giving a potential-energy
+            curve.</li>
+      </ul>
+      <p>Name a molecule from the library, give a SMILES, or paste a formula.
+      Add &ldquo;in water&rdquo; for an implicit solvent, or &ldquo;with charge
+      -1&rdquo; for an ion.</p>
+      <p class="muted">Each figure carries PNG and CSV buttons underneath it,
+      so the data behind a plot can be redrawn at publication resolution.</p>
+    </div>
+  </div>
+</div>
+
+<aside class="drawer" id="libraryDrawer">
+  <div class="drawer-head">
+    <h3>Molecule library</h3>
+    <button class="btn tiny ghost" id="btnCloseLib" type="button">Close</button>
+  </div>
+  <div class="drawer-body">
+    <input type="search" id="libSearch" placeholder="Search molecules&hellip;">
+    <div id="libBody"></div>
+  </div>
+</aside>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>

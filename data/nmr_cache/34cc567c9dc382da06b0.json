@@ -1,0 +1,63 @@
+{
+ "format": 2,
+ "key": "tms",
+ "label": "TMS  Si(CH3)4",
+ "formula": "C4H12Si",
+ "geometry": "C-H 1.0900 A x12; C-Si 1.8750 A x4 (the module's experimental geometry)",
+ "geometry_source": "builtin",
+ "geometry_signature": "c7a0149db213",
+ "geometry_documented": "Si-C 1.875 A, C-H 1.090 A, tetrahedral (electron diffraction)",
+ "basis": "6-31g*",
+ "conv_tol": 1e-13,
+ "field_step_au": 0.0003,
+ "natm": 17,
+ "nao": 98,
+ "atoms_per_element": {
+  "Si": 1,
+  "C": 4,
+  "H": 12
+ },
+ "element_shielding_ppm": {
+  "Si": {
+   "sigma_iso_ppm": 453.83842247161795,
+   "spread_ppm": 0.0,
+   "n_equivalent": 1,
+   "per_atom_ppm": [
+    453.83842247161795
+   ]
+  },
+  "C": {
+   "sigma_iso_ppm": 199.18447411886748,
+   "spread_ppm": 7.984425565155107e-09,
+   "n_equivalent": 4,
+   "per_atom_ppm": [
+    199.1844741227517,
+    199.18447411486935,
+    199.1844741149951,
+    199.18447412285377
+   ]
+  },
+  "H": {
+   "sigma_iso_ppm": 32.73004414991774,
+   "spread_ppm": 0.11298998780412006,
+   "n_equivalent": 12,
+   "per_atom_ppm": [
+    32.74900670479999,
+    32.777057838277315,
+    32.66406795157801,
+    32.74900677941899,
+    32.664067850473195,
+    32.77705777497564,
+    32.74900677939318,
+    32.664067850479405,
+    32.777057774968384,
+    32.749006704775084,
+    32.77705783826706,
+    32.664067951606576
+   ]
+  }
+ },
+ "dE_dB_max": 0.0,
+ "tensor_asymmetry_max_ppm": 5.785104526412301,
+ "cached": false
+}

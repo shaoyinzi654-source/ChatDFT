@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChatDFT 审计 · 第 17 轮 — 参考物的几何、分子库的两套 schema、以及从未跑过的断言</title>
+<style>
+  :root {
+    --ink: #1b1f24; --muted: #5b6570; --line: #e2e6ea; --bg: #ffffff;
+    --soft: #f6f8fa; --warn: #9a5b00; --warnbg: #fdf3e3;
+    --ok: #1a7f37; --okbg: #eaf6ec; --bad: #b42318; --badbg: #fdeceb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.65 -apple-system, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", Roboto, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 28px 80px; }
+  h1 { font-size: 27px; margin: 0 0 6px; letter-spacing: -.2px; }
+  .sub { color: var(--muted); margin: 0 0 34px; font-size: 14px; }
+  h2 { font-size: 19px; margin: 42px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 26px 0 8px; }
+  p { margin: 10px 0; }
+  code { background: var(--soft); padding: 1px 5px; border-radius: 4px;
+    font-family: "SFMono-Regular", Consolas, monospace; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0;
+    font-size: 14px; }
+  th, td { text-align: left; padding: 9px 11px; border: 1px solid var(--line);
+    vertical-align: top; }
+  th { background: var(--soft); font-weight: 600; }
+  td.n { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    white-space: nowrap; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 12px; font-weight: 600; }
+  .t-ok { background: var(--okbg); color: var(--ok); }
+  .t-bad { background: var(--badbg); color: var(--bad); }
+  .t-warn { background: var(--warnbg); color: var(--warn); }
+  .note { background: var(--warnbg); border-left: 3px solid #f0c99a;
+    padding: 10px 14px; margin: 16px 0; font-size: 14px; }
+  .quote { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    background: var(--soft); border: 1px solid var(--line); border-radius: 5px;
+    padding: 11px 13px; margin: 14px 0; white-space: pre; overflow-x: auto; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 5px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>ChatDFT 审计 · 第 17 轮</h1>
+<p class="sub">参考物的几何、分子库的两套 schema、以及一条从未跑过的断言 ·
+2026-09-15</p>
+
+<p>第 16 轮结束时，NMR 参考缓存第一次真正能用——五个曾经全部被截断的文件被
+重写，TMS 也在 <code>CHATDFT_NMR_ALLOW_SWAP=1</code> 下算了出来。缓存一到位，
+一段此前<b>从未被执行过</b>的契约断言第一次跑了起来，而未变异的基线就已经失败：</p>
+
+<div class="quote">!! baseline already failing:
+   nmr/water: water is its own 17O reference, so its shift must be 0.00; got 0.374</div>
+
+<p>本轮从这里开始，一共找出并修掉四个真实缺陷，另有五个变异在第一次运行时
+什么都没触发，其中三个指向我自己的断言写得太弱。</p>
+
+<h2>缺陷 1：参考物算在了一个样品没有的几何上 <span class="tag t-bad">严重</span></h2>
+
+<p>契约里那条断言是刻意设计的，注释写得很清楚：</p>
+
+<div class="quote">Water is the right test molecule because it is its own 17O reference:
+if the reference machinery is wired up correctly, water's 17O shift has to
+come out at exactly 0.00, and no amount of wrongness in the intermediate
+numbers can fake that.</div>
+
+<p>它一直是红的。原因是产品里有<b>两个水分子</b>：分子库里的水，和 NMR 模块自带的
+一个实验 <code>r_e</code> 水。</p>
+
+<table>
+<tr><th>来源</th><th class="n">O–H / Å</th><th class="n">H–O–H / °</th>
+    <th class="n">σ(¹⁷O) / ppm</th></tr>
+<tr><td>分子库（用户敲 “water” 得到的）</td><td class="n">0.96857</td>
+    <td class="n">104.00</td><td class="n">323.866</td></tr>
+<tr><td>变异测试里手打的 water</td><td class="n">0.95792</td>
+    <td class="n">104.42</td><td class="n">329.604</td></tr>
+<tr><td>模块自带的实验 r_e</td><td class="n">0.95720</td>
+    <td class="n">104.52</td><td class="n">329.978</td></tr>
+</table>
+
+<p>¹⁷O 的屏蔽值对 O–H 键长的敏感度是 <b>539 ppm/Å</b>。0.0114 Å 的几何差就是
+<b>6.11 ppm</b>——不是舍入误差，而是加在输出里每一个 ¹⁷O 位移上的系统性偏移。
+契约里那句“水对自己的 ¹⁷O 位移必须是 0”实际上错到了 6.11 ppm（变异测试用
+它自己的手打几何，所以只报了 0.374）。</p>
+
+<h3>修法</h3>
+
+<p>规则改成：<b>凡分子库里有这个参考化合物，参考就用库的几何</b>，于是计算那个分子
+得到的位移恰好为零；库里没有的（TMS、PH₃、CFCl₃）继续用有记录的实验几何，并把
+来源写进载荷和缓存。</p>
+
+<p>查找按<b>元素计数</b>，绝不按名字——这是让 ¹⁹F 保持诚实的原因：库里的
+chloroform 是 CHCl₃，¹⁹F 的参考是 CFCl₃，若按名字匹配，每一个 ¹⁹F 位移都会被
+悄悄挪到 CHCl₃ 的标度上。库里共有三组元素计数是重复的（氢氧根/羟基自由基、
+丁烷/异丁烷、吡嗪/嘧啶），都不是参考化合物，“唯一匹配才采用”的规则会退回
+内置几何而不是乱选一个。</p>
+
+<p>几何是数值的输入，所以它也是缓存键的一部分。过去的键只带基组、收敛容差和
+场步长，改几何会静默复用旧屏蔽值——和上一轮“缓存从来没写成功”是同一类错误，
+只是深了一层。</p>
+
+<h2>缺陷 2：断言写下了，却从没跑过 <span class="tag t-warn">方法论</span></h2>
+
+<p>“水对自己的 ¹⁷O 位移必须是 0.00”从第 16 轮写下就存在，但它位于载荷段里，
+而载荷段在构不出载荷时会提前返回。水是构不出的：质子需要 TMS，而 TMS 需要
+5.2 GB，这台机器没有。于是整整一轮，这条断言被声明、被打印为 PASS，<b>一次也
+没执行过</b>。障碍一移除，它立刻以 6.11 ppm 失败。</p>
+
+<p>跳过路径后面的断言不是通过的断言。测试框架现在对每一条跳过的变异单独打印
+<code>SKIPPED</code> 和原因——这才是这件事最终被发现的原因。</p>
+
+<h2>缺陷 3：分子库有两套 schema <span class="tag t-bad">用户可见</span></h2>
+
+<p><code>library.json</code> 由两个脚本写成：45 个条目用
+<code>display_name</code>/<code>description</code>，而 <code>extend_library</code>
+追加的 17 个条目用 <code>name</code>/<code>desc</code>（外加多余的
+<code>key</code>）。所有读取点都找前一对，于是这 17 个分子在 UI 里：</p>
+
+<ul>
+<li>名字是<b>小写的 key</b>（“propane” 而不是 “Propane”）；</li>
+<li>描述<b>完全为空</b>——尽管真正的字符串就在同一个 dict 里，放在一个没人读的键下。</li>
+</ul>
+
+<p>另外两层：那 17 个条目<b>没有</b> <code>charge</code>/<code>multiplicity</code>，
+靠读取端的默认值 0/1 兜底（将来若有带电分子走同一条路加进来，会被静默当中性
+单重态算）；而水的描述写着 “~104.5 deg”，实际几何是 <b>104.00</b>。</p>
+
+<p>修法分三处：数据规范化为单一 schema（62 条全部为 8 个规范字段，键序与几何
+不变）；访问器兼容两套（让遗留条目不再隐形）；生成脚本改输出规范字段并带上真实
+电荷。契约新增断言，检查<b>用户看到的结果</b>而不是键名——并且单独断言“不得出现
+遗留字段”，因为宽容的读取器掩盖漂移，而断言阻止漂移被再写出来。</p>
+
+<h2>缺陷 4：根本没有参考定义的核被无声丢弃 <span class="tag t-bad">严重</span></h2>
+
+<p>我在为 “unreferenced_elements” 找一份能让它失败的数据集时发现：21 个 NMR 活性
+核里有 <b>14 个</b>根本没有参考（Al、B、Br、Cl、D、Hg、I、Li、Na、Pb、Pt、S、Se、Sn）。
+而那个列表是这样构造的：</p>
+
+<div class="quote">missing = sorted({s for s in syms if s in NUCLEI and s in REFERENCE_FOR}
+                 - set(refs))</div>
+
+<p>那个 <code>s in REFERENCE_FOR</code> 恰好排除了<b>没有任何参考定义</b>的元素——而这
+正是这个字段存在的全部意义。用噻吩（C₄H₄S）实测：</p>
+
+<div class="quote">active_elements      : ['C', 'H', 'S']
+references           : ['C', 'H']
+unreferenced_elements: []          ← 错，应为 ['S']
+CONTRACT wants       : ['S']
+warnings mentioning S: []          ← 一句提示都没有</div>
+
+<p>硫在核表里 <code>delta_ppm: None</code>，无谱线，且<b>只字未提</b>。用户看到的是
+一个含硫分子，却不知道 ³³S 不可用。修法是把过滤去掉——<code>refs</code> 只含参考
+算成功的元素，减法本身不需要额外条件——并把两种情形分开告警：“本构建没有为 S
+定义参考”和“定义了但没算出来”。修复后实测：</p>
+
+<div class="quote">unreferenced_elements: ['S']
+MATCH: True
+WARNING: No reference compound is defined for S in this build, so those nuclei
+have an absolute shielding but NO chemical shift, and they are absent from the
+spectrum. The shifts are not zero -- they are unavailable, and quoting the
+absolute shielding as if it were a shift would be wrong by the whole scale
+(33S spans about 800 ppm).</div>
+
+<h2>五个“什么都没触发”的变异 <span class="tag t-warn">自查</span></h2>
+
+<p>本轮新写的变异里，五个在第一次运行时没有让任何断言失败。逐个查下去，其中
+三个是我的断言太弱，两个是变异本身设计得不对：</p>
+
+<table>
+<tr><th>变异</th><th>为什么没触发</th><th>怎么修的</th></tr>
+<tr><td class="n">L1 遗留 schema</td>
+    <td>访问器本来就兼容两套，所以遗留条目依然正常显示——断言没问题</td>
+    <td>新增「不得出现遗留字段」的断言；宽容读取器是第二道防线，不是第一道</td></tr>
+<tr><td class="n">L7 角度声明错误</td>
+    <td>用了固定 0.6° 容差，而这个缺陷本身偏差 0.5°，正好落在窗内。</td>
+    <td>容差改为由<b>声明的精度</b>推导（<code>0.5×10⁻ᵈ</code>）：写到一位小数就得对到一位小数</td></tr>
+<tr><td class="n">L9 多余行</td>
+    <td>行数判断写成 <code>&gt; 2+natm+1</code>，多给了一行余量</td>
+    <td>改为 <code>&gt; 2+natm</code>（全库 62 条都正好是 2+natm 行）</td></tr>
+<tr><td class="n">N15 单坐标轴</td>
+    <td>变异改了谱的键却没改查找，代码抛 <code>KeyError</code>，测试框架半路死掉，
+        后面 9 个变异根本没跑</td>
+    <td>重新设计变异；并让框架<b>逐个变异捕获异常</b>，崩溃记为「未证明」而非「已检出」</td></tr>
+<tr><td class="n">N18 隐藏未参考</td>
+    <td>TMS 缓存到位后，水已无未参考元素，<code>[]</code> 就是正确值，变异是空操作</td>
+    <td>给这条断言一份<b>真实数据集</b>：噻吩（含 S）</td></tr>
+</table>
+
+<div class="note">
+<b>崩溃不等于检出。</b>N15 那次崩溃让 9 个变异没被执行，而汇总行看起来仍像一次
+完整运行。一个断言没跑到，就不算它通过了。
+</div>
+
+<h2>我自己犯的错</h2>
+
+<ol>
+<li>把水的库描述改成 “relaxed at B3LYP/6-31G*”，但我<b>无法证实</b>来源：RDKit
+    从 SMILES 嵌入给出的是 0.96900/103.978，与库里的 0.96857/104.00 并不相同。
+    已改为只陈述可验证的几何数值。</li>
+<li>在变异测试运行期间编辑 <code>nmr.py</code>。框架在开始时快照文件、每次变异后
+    还原快照，所以我的修改会被冲掉；更要紧的是，一个写到一半的编辑（多出一个
+    <code>"""</code> 截断模块文档串）会被写进快照并还原 25 次。已杀掉进程、修好、
+    重跑。</li>
+<li>把参考几何改了却没同步文档里的精度表——¹⁷O 从 329.60 变成 323.87，¹⁴N 从
+    263.16 变成 262.48。已按缓存里的真实值更新，并补上「参考几何」一节。</li>
+</ol>
+
+<h2>改动文件</h2>
+
+<table>
+<tr><th>文件</th><th>改动</th></tr>
+<tr><td class="n">backend/engine/nmr.py</td>
+    <td>参考几何优先取分子库（按元素计数）、<code>reference_geometry_source</code> /
+        <code>reference_library_name</code> / <code>reference_geometry_note</code>
+        （描述由坐标推导）、<code>_geometry_signature</code>（纳入缓存键）、
+        <code>missing</code> 去掉错误过滤并区分两种告警、精度表与新增「参考几何」一节</td></tr>
+<tr><td class="n">backend/engine/molecule.py</td>
+    <td>新增 <code>_entry_name</code> / <code>_entry_desc</code> 兼容两套 schema，
+        替换全部 6 处硬读 <code>display_name</code></td></tr>
+<tr><td class="n">data/molecules/library.json</td>
+    <td>17 个条目规范化（<code>name</code>→<code>display_name</code>、<code>desc</code>→
+        <code>description</code>、去掉冗余 <code>key</code>、补 charge/multiplicity）；
+        修正水的描述</td></tr>
+<tr><td class="n">backend/extend_library.py</td>
+    <td>输出规范 schema，并写出分子的真实电荷与多重度</td></tr>
+<tr><td class="n">backend/rebuild_library.py · backend/agent/designer.py</td>
+    <td>改用 <code>_entry_name</code></td></tr>
+<tr><td class="n">backend/contract.py</td>
+    <td>新增 <code>library_sections</code>（62 条库条目 + 描述几何声明校验）与
+        <code>nmr_unreferenced_sections</code>（噻吩）；新增参考几何、缓存键含几何
+        的断言；新增噻吩 NMR 作业</td></tr>
+<tr><td class="n">backend/mutate_nmr.py</td>
+    <td>新增 N19–N25；N15 重新设计；N18 改挂噻吩载荷；逐个变异捕获异常</td></tr>
+<tr><td class="n">backend/mutate_library.py</td>
+    <td>新增：11 个变异（9 个数据级 + 2 个读取器级），按字节还原校验</td></tr>
+<tr><td class="n">backend/gen_nmr_cache.py</td>
+    <td>缓存键带上几何指纹</td></tr>
+<tr><td class="n">backend/agent/planner.py</td>
+    <td>讲解里报出每个参考物实际使用的几何</td></tr>
+<tr><td class="n">README.md</td>
+    <td>新增「参考几何」与「无参考核」两条诚实性说明</td></tr>
+<tr><td class="n">probe_nmr27.py / probe_nmr28.py</td>
+    <td>参考几何 vs 库几何对比；¹⁷O 几何敏感度实测（539 ppm/Å）</td></tr>
+</table>
+
+<h2>验证</h2>
+
+<p>六个 NMR 参考全部重算（TMS 295 s、CFCl₃ 118 s），几何描述为推导值、来源已记录：</p>
+
+<table>
+<tr><th>参考物</th><th>来源</th><th class="n">屏蔽值 / ppm</th><th>几何（由坐标推导）</th></tr>
+<tr><td>tms</td><td>内置</td><td class="n">Si 453.838 · C 199.184 · H 32.730</td>
+    <td>C-H 1.0900 Å ×12；C-Si 1.8750 Å ×4</td></tr>
+<tr><td>water</td><td>分子库</td><td class="n">O 323.866 · H 31.431</td>
+    <td>H-O 0.9686 Å ×2；H-O-H 104.00°</td></tr>
+<tr><td>ammonia</td><td>分子库</td><td class="n">N 262.479 · H 32.779</td>
+    <td>H-N 1.0160 Å ×3；H-N-H 106.13°</td></tr>
+<tr><td>methane</td><td>分子库</td><td class="n">C 200.135 · H 32.198</td>
+    <td>C-H 1.0897 Å ×4；H-C-H 109.47°</td></tr>
+<tr><td>phosphine</td><td>内置</td><td class="n">P 620.111 · H 30.326</td>
+    <td>H-P 1.4200 Å ×3；H-P-H 93.50°</td></tr>
+<tr><td>chloroform_f</td><td>内置</td><td class="n">C 83.525 · F 273.072 · Cl 553.170</td>
+    <td>C-Cl 1.7600 Å ×3；C-F 1.3300 Å</td></tr>
+</table>
+
+<p>水的 ¹⁷O 参考值 323.866 与探针 28 直接测得的库水屏蔽值 323.865572 一致——参考
+与分子确实是同一个几何了。</p>
+
+<h3>变异测试</h3>
+
+<p><code>backend/mutate_nmr.py</code>：<b>25 个变异全部触发</b>，源码干净还原；
+无 SKIPPED。其中 N18 用噻吩载荷验证，基线 <code>unreferenced: ['S']</code>，
+变异后 <code>[]</code>，两条断言失败。</p>
+
+<p><code>backend/mutate_library.py</code>（新增）：<b>11 个变异全部触发</b>
+（9 个数据级 + 2 个读取器级），<code>library.json</code> 与
+<code>molecule.py</code> 均按<b>字节</b>还原——一个把数据文件重新格式化了的变异
+框架，等于改了它本来要测的东西。</p>
+
+<h3>门禁</h3>
+
+<div class="quote">  check_library    PASS                 63 checks
+  contract         PASS                 51 checks
+
+  2/2 gates passed</div>
+
+<p>三条新增检查段都确实跑了：</p>
+
+<div class="quote">[PASS] every library entry is usable and its description matches its own geometry
+[PASS] the NMR shielding tensor is physical and its level of theory is stated
+[PASS] a nucleus with no reference is named rather than dropped</div>
+
+<p>第二条是这一轮最关键的一行：它包含「水对自己的 ¹⁷O 位移必须是 0.00」——
+从第 16 轮写下到现在，它第一次真正通过。</p>
+
+<h2>下一轮候选</h2>
+
+<ul>
+<li>库里 <code>geometry_source</code> 一律标为 MMFF94，但水、水二聚体等条目的几何
+    与当前 RDKit 嵌入结果并不一致（0.96857 vs 0.96900）——来源声明与数据不符，
+    需要逐条核查或改为由数据推导。</li>
+<li>21 个 NMR 活性核里 14 个没有参考；至少为 Cl、S、B 这类常见核补上参考化合物，
+    或正式记录为何不提供。</li>
+<li>把 <code>library_sections</code> 与 <code>nmr_unreferenced_sections</code> 接进
+    <code>backend/gates.py</code>，让它们在常规门禁里跑。</li>
+</ul>
+
+</main>
+</body>
+</html>

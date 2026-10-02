@@ -1,0 +1,42 @@
+{
+ "format": 2,
+ "key": "ammonia",
+ "label": "NH3",
+ "formula": "H3N",
+ "geometry": "H-N 1.0160 A x3; H-N-H 106.13 deg (the molecule library)",
+ "geometry_source": "library",
+ "geometry_signature": "dfc6e9a5ebc1",
+ "geometry_documented": "N-H 1.0124 A, H-N-H 106.67 deg (experimental r_e)",
+ "basis": "6-31g*",
+ "conv_tol": 1e-13,
+ "field_step_au": 0.0003,
+ "natm": 4,
+ "nao": 20,
+ "atoms_per_element": {
+  "N": 1,
+  "H": 3
+ },
+ "element_shielding_ppm": {
+  "N": {
+   "sigma_iso_ppm": 262.4793162730544,
+   "spread_ppm": 0.0,
+   "n_equivalent": 1,
+   "per_atom_ppm": [
+    262.4793162730544
+   ]
+  },
+  "H": {
+   "sigma_iso_ppm": 32.7787244779384,
+   "spread_ppm": 5.201211677530182e-05,
+   "n_equivalent": 3,
+   "per_atom_ppm": [
+    32.77868980319805,
+    32.77874181530233,
+    32.778741815314824
+   ]
+  }
+ },
+ "dE_dB_max": 0.0,
+ "tensor_asymmetry_max_ppm": 0.6524232262601194,
+ "cached": false
+}

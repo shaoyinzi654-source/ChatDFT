@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChatDFT 审计 · 第 15 轮 — Raman 光谱：极化率、活性与退偏比</title>
+<style>
+  :root {
+    --ink: #1b1f24; --muted: #5b6570; --line: #e2e6ea; --bg: #ffffff;
+    --soft: #f6f8fa; --warn: #9a5b00; --warnbg: #fdf3e3;
+    --ok: #1a7f37; --okbg: #eaf6ec; --bad: #b42318; --badbg: #fdeceb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.65 -apple-system, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", Roboto, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 28px 80px; }
+  h1 { font-size: 27px; margin: 0 0 6px; letter-spacing: -.2px; }
+  .sub { color: var(--muted); margin: 0 0 34px; font-size: 14px; }
+  h2 { font-size: 19px; margin: 42px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 26px 0 8px; }
+  p { margin: 10px 0; }
+  code { background: var(--soft); padding: 1px 5px; border-radius: 4px;
+    font-family: "SFMono-Regular", Consolas, monospace; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0;
+    font-size: 14px; }
+  th, td { text-align: left; padding: 9px 11px; border: 1px solid var(--line);
+    vertical-align: top; }
+  th { background: var(--soft); font-weight: 600; }
+  td.n { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    white-space: nowrap; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 12px; font-weight: 600; }
+  .t-ok { background: var(--okbg); color: var(--ok); }
+  .t-bad { background: var(--badbg); color: var(--bad); }
+  .note { background: var(--warnbg); border-left: 3px solid #f0c99a;
+    padding: 10px 14px; margin: 16px 0; font-size: 14px; }
+  .quote { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    background: var(--soft); padding: 10px 12px; border-radius: 6px;
+    overflow-x: auto; margin: 10px 0; color: #333; }
+  ul { padding-left: 22px; } li { margin: 5px 0; }
+  .kpi { display: flex; gap: 14px; flex-wrap: wrap; margin: 18px 0 4px; }
+  .kpi div { flex: 1 1 150px; border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 14px; background: var(--soft); }
+  .kpi b { display: block; font-size: 21px; }
+  .kpi span { font-size: 12.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>第 15 轮：Raman 光谱 — 极化率、活性与退偏比</h1>
+<p class="sub">第 12 轮（IR 强度）和第 14 轮（UV-Vis 绝对标度）的教训是同一句话：<strong>被归一化到
+自身最大值的图，看不见任何整体性的标度错误</strong>。Raman 把这句话推到了极限——IR 谱和 Raman 谱
+<em>都</em>归一化到 100，所以一个「把 IR 强度直接当作 Raman 活性」的实现，两条曲线都光滑、都封顶
+在 100、轴标签都合理，而<strong>唯一能暴露它的地方，是两条谱线互相矛盾</strong>。</p>
+
+<div class="kpi">
+  <div><b>5.13 → 9.89</b><span>水的 α<sub>iso</sub>：6-31G* 对 aug-cc-pVTZ（实验 9.6–9.9 a.u.）</span></div>
+  <div><b>−48%</b><span>6-31G* 的极化率误差（各向异性误差 4.9×）</span></div>
+  <div><b>0.7500</b><span>B2 反对称伸缩的退偏比，由对称性精确给出</span></div>
+  <div><b>77.0 / 1.77</b><span>对称伸缩：最强的 Raman 线，最弱的 IR 带（km/mol）</span></div>
+  <div><b>−0.003%</b><span>Raman 求和规则残差（无需任何实验值）</span></div>
+  <div><b>16 / 16</b><span>变异测试全部触发</span></div>
+</div>
+
+<h2>1. 两个产品缺陷，和一个缺失的功能</h2>
+
+<h3>缺陷 1：基组清单里没有任何弥散函数</h3>
+<p>Raman 需要极化率，而<strong>分子的极化率由电子密度的外尾决定</strong>。应用的 <code>BASIS_SETS</code>
+里九个基组全部是紧凑基组，没有一个带弥散函数。实测（B3LYP，水，<code>probe_raman3.py</code>）：</p>
+
+<table>
+<thead><tr><th>基组</th><th>α<sub>iso</sub> (a.u.)</th><th>α<sub>iso</sub> (Å³)</th><th>各向异性 γ</th><th>相对实验</th></tr></thead>
+<tbody>
+<tr><td class="n">6-31G</td><td class="n">4.5366</td><td class="n">0.6723</td><td class="n">4.0790</td><td><span class="tag t-bad">−53%</span></td></tr>
+<tr><td class="n">6-31G*</td><td class="n">5.1268</td><td class="n">0.7597</td><td class="n">3.2477</td><td><span class="tag t-bad">−48%</span></td></tr>
+<tr><td class="n">cc-pVDZ</td><td class="n">5.3905</td><td class="n">0.7988</td><td class="n">3.0035</td><td><span class="tag t-bad">−45%</span></td></tr>
+<tr><td class="n">6-31+G*</td><td class="n">6.8829</td><td class="n">1.0199</td><td class="n">0.9446</td><td><span class="tag t-bad">−29%</span></td></tr>
+<tr><td class="n">cc-pVTZ</td><td class="n">7.1796</td><td class="n">1.0639</td><td class="n">2.2143</td><td><span class="tag t-bad">−26%</span></td></tr>
+<tr><td class="n">6-31++G**</td><td class="n">7.2470</td><td class="n">1.0739</td><td class="n">1.1299</td><td><span class="tag t-bad">−25%</span></td></tr>
+<tr><td class="n">aug-cc-pVDZ</td><td class="n">9.5198</td><td class="n">1.4107</td><td class="n">0.9282</td><td><span class="tag t-ok">−2.4%</span></td></tr>
+<tr><td class="n">aug-cc-pVTZ</td><td class="n">9.8891</td><td class="n">1.4654</td><td class="n">0.6608</td><td><span class="tag t-ok">+1.4%</span></td></tr>
+<tr><td class="n">实验</td><td class="n">9.6–9.9</td><td class="n">1.42–1.47</td><td class="n">—</td><td>—</td></tr>
+</tbody>
+</table>
+<p class="sub" style="margin-top:-6px">最后一列以实验区间中点 9.75 a.u. 为基准。注意 6-31G* 与 aug-cc-pVDZ
+只差基组，不含任何其他改动。</p>
+
+<p>值得注意的是：<strong>各向异性比标量更糟</strong>。6-31G* 给出 γ = 3.25，aug-cc-pVTZ 给出 0.66——
+差 4.9 倍。而退偏比 ρ = 3γ²/(45ᾱ² + 4γ²) 完全由各向异性构成，所以不带弥散函数的 ρ 是<em>定量错误</em>的，
+不只是「精度差一点」。因此本轮把 <code>6-31+G*</code>、<code>6-31++G**</code>、<code>aug-cc-pVDZ</code>、
+<code>aug-cc-pVTZ</code> 加入基组清单，并新增 <code>basis_has_diffuse()</code>：在无弥散基组上仍会出图，
+但结果里必须带一条明确的警告。</p>
+
+<h3>缺陷 2：根本没有 Raman 谱</h3>
+<p>这个构建里 <code>pyscf.prop</code> 不存在，<code>dft.RKS</code> 也没有 <code>polarizability()</code>
+方法，所以极化率必须按定义写出来。这就是本轮的主要工作量。</p>
+
+<h3>缺失的功能：核磁屏蔽（GIAO）与 ESP/MK 电荷</h3>
+<p>仍未实现，是下一轮的目标。本轮先把 Raman 做完做对。</p>
+
+<h2>2. CPHF 的约定是<em>测</em>出来的，不是推出来的</h2>
+<p>一条 Raman 谱需要在全部 6N 个位移几何上求 dα/dx。有限场法每个位移要 ~18 次 SCF（水是 324 次），
+CPHF 只要 1 次 SCF + 1 次 Krylov 解——这正是 Raman 可行的原因。但 CPHF 的三个约定细节都不会自己报错：</p>
+<ul>
+<li><code>fvind</code> 只能包含双电子部分。<code>cphf.solve_nos1</code> 自己构造
+  <code>e_ai = 1/(e_a − e_i)</code> 并把 <code>−e_ai·h1</code> 交给 <code>lib.krylov</code>
+  （后者解 <code>(1+aop)x = b</code>），合起来是 <code>[diag(e_a−e_i) + fvind] x = −h1</code>。
+  在 <code>fvind</code> 里再加一次对角线就是重复计数。</li>
+<li><code>fvind</code> 必须是 <code>mf.gen_response(...)</code>，<strong>不能</strong>是
+  <code>mf.get_veff</code>。<code>get_veff</code> 返回的是密度对应的 XC <em>势</em>，而响应需要的是
+  E<sub>xc</sub> 的二阶导（核 <code>f_xc</code>）。用错会静默丢掉整个 XC 响应——对 B3LYP 来说
+  那是答案的大部分——而张量看上去依然合理。</li>
+<li>前置因子是 4，不是 2：能量对场是二次的，求两次导带一个 2；闭壳层密度响应再带一个 2。</li>
+</ul>
+<p>与其相信这段推导，不如把 4 个候选前置因子 × 2 个符号<strong>全部</strong>拿去和有限场张量打分
+（<code>probe_raman4.py</code>）。只有 <code>+4 / 翻转符号</code> 命中：</p>
+
+<table>
+<thead><tr><th>基组</th><th>有限场 α<sub>iso</sub> (a.u.)</th><th>CPHF α<sub>iso</sub> (a.u.)</th><th>最大绝对偏差 (a.u.)</th><th>耗时（有限场 / CPHF）</th></tr></thead>
+<tbody>
+<tr><td class="n">6-31G*</td><td class="n">5.1268</td><td class="n">5.1267</td><td class="n">6.5e-05</td><td class="n">10.3 s / 1.1 s</td></tr>
+<tr><td class="n">6-31+G*</td><td class="n">6.8829</td><td class="n">6.8826</td><td class="n">4.5e-04</td><td class="n">— / —</td></tr>
+<tr><td class="n">aug-cc-pVDZ</td><td class="n">9.5198</td><td class="n">9.5195</td><td class="n">4.9e-04</td><td class="n">20.6 s / 2.5 s</td></tr>
+</tbody>
+</table>
+
+<p>两个用完全不同机器造出来的数——有限场是 SCF 能量差分，CPHF 是 Krylov 解——在三个基组上一致到
+有限场法<em>自身的</em>步长误差水平。有限场那条路本身也不是「信任」来的：<code>probe_raman2.py</code>
+验证了 <code>int1e_r</code> 在 He 上复现 <code>mf.dip_moment</code> 到 4.4e-16，以及 Hellmann–Feynman
+<code>dE/dF = −μ</code> 到 1.7e-6。</p>
+
+<h2>3. 水的验证：Raman 与 IR 必须<em>互相矛盾</em></h2>
+<p>水是最锋利的测试对象，因为它的对称伸缩同时是<strong>最弱的 IR 带</strong>和<strong>最强的 Raman 线</strong>。
+任何复用 IR 强度的实现都会把这个关系正好搞反。</p>
+
+<h3>B3LYP/6-31G*</h3>
+<table>
+<thead><tr><th>模式</th><th>频率 (cm⁻¹)</th><th>IR (km/mol)</th><th>Raman (Å⁴/amu)</th><th>ρ</th></tr></thead>
+<tbody>
+<tr><td>弯曲 A1</td><td class="n">1710.6</td><td class="n">79.57</td><td class="n">7.602</td><td class="n">0.5411</td></tr>
+<tr><td><strong>对称伸缩 A1</strong></td><td class="n">3721.8</td><td class="n"><strong>1.77</strong></td><td class="n"><strong>77.031</strong></td><td class="n">0.1892</td></tr>
+<tr><td>反对称伸缩 B2</td><td class="n">3845.6</td><td class="n">20.11</td><td class="n">39.171</td><td class="n"><strong>0.7500</strong></td></tr>
+</tbody>
+</table>
+<p>IR 比值：弯曲/对称 = 45.0×，反对称/对称 = 11.4×（实测 44× 与 11×）。</p>
+
+<h3>B3LYP/aug-cc-pVDZ</h3>
+<table>
+<thead><tr><th>模式</th><th>频率 (cm⁻¹)</th><th>IR (km/mol)</th><th>Raman (Å⁴/amu)</th><th>ρ</th><th>实测 ρ</th></tr></thead>
+<tbody>
+<tr><td>弯曲 A1</td><td class="n">1618.5</td><td class="n">71.34</td><td class="n">1.815</td><td class="n">0.6644</td><td class="n">~0.67</td></tr>
+<tr><td><strong>对称伸缩 A1</strong></td><td class="n">3794.0</td><td class="n">4.05</td><td class="n"><strong>100.510</strong></td><td class="n"><strong>0.0552</strong></td><td class="n">~0.06</td></tr>
+<tr><td>反对称伸缩 B2</td><td class="n">3903.9</td><td class="n">60.68</td><td class="n">26.983</td><td class="n"><strong>0.7500</strong></td><td class="n">0.75</td></tr>
+</tbody>
+</table>
+<p>换成弥散基组后，三个退偏比（0.055 / 0.664 / 0.750）<strong>落在水的气相实测值上</strong>
+（~0.06 / ~0.67 / 0.75）。这不是拟合出来的——ρ 完全由极化率各向异性决定。</p>
+
+<div class="note">
+<strong>ρ ≤ 0.75 是定理，不是经验规律。</strong>ρ = 3γ²/(45ᾱ² + 4γ²) 的分母永远大于分子，且当
+各向同性部分为零时取等号。水的反对称伸缩是 C<sub>2v</sub> 下的 B2 模式，其 ᾱ′ 由对称性精确为零，
+所以 ρ 必须<strong>恰好</strong>是 0.7500——代码给出的是 0.7500。这是一个同时检验投影和张量、
+且不含任何可调参数的判据；符号写反或下标转置都会把它挪开。
+</div>
+
+<h2>4. Raman 求和规则：不需要任何实验值</h2>
+<p>和 IR 那条完全同构的论证，只是把矢量换成张量。质量加权坐标下的正交变换保持平方和，而 3N 个方向
+张满整个空间，于是</p>
+<div class="quote">Σᵢ ‖dα/dQᵢ‖²_F  =  Σ<sub>a,k</sub> (1/m<sub>a</sub>) ‖dα/dx<sub>a,k</sub>‖²_F  −  转动项</div>
+<p>两个项的处理方式不同，而且都不是随手丢掉的：</p>
+<ul>
+<li><strong>平动项精确为零。</strong>α 是电子分布的性质，整个分子平移时它不变，所以 dα/dδ ≡ 0。
+  这与 IR 不同——IR 里带电荷的分子平动贡献 <code>3(qe)²/M</code>。所以一个在带电分子的 IR 求和规则里
+  看不出来的投影错误，在这里会露出来，反之亦然。</li>
+<li><strong>转动项不为零。</strong>绕单位轴 v 转 θ 时 α → RαRᵀ，R = 1 + θK，
+  故 dα/dθ = Kα − αK，其中 K(v)<sub>kl</sub> = −ε<sub>vkl</sub>。该转动方向的质量加权范数是 √I<sub>v</sub>，
+  贡献 ‖Kα − αK‖²_F / I<sub>v</sub>。对水这一项与振动项同量级。</li>
+</ul>
+
+<table>
+<thead><tr><th>量</th><th>6-31G*</th><th>aug-cc-pVDZ</th></tr></thead>
+<tbody>
+<tr><td>Σ(1/m)‖dα/dx‖²_F</td><td class="n">11.710311</td><td class="n">9.880723</td></tr>
+<tr><td>转动项</td><td class="n">1.342052</td><td class="n">0.090471</td></tr>
+<tr><td>平动项</td><td class="n">0.0（精确）</td><td class="n">0.0（精确）</td></tr>
+<tr><td>期望 Σ‖dα/dQ‖²_F</td><td class="n">10.368259</td><td class="n">9.790252</td></tr>
+<tr><td>实测 Σ‖dα/dQ‖²_F</td><td class="n">10.367998</td><td class="n">9.790167</td></tr>
+<tr><td><strong>残差</strong></td><td class="n"><span class="tag t-ok">−0.003%</span></td><td class="n"><span class="tag t-ok">−0.001%</span></td></tr>
+<tr><td>Frobenius 与 3ᾱ²+(2/3)γ² 之差</td><td class="n">7.1e-05%</td><td class="n">8.5e-05%</td></tr>
+</tbody>
+</table>
+
+<p><strong>一个容易写错的地方：求和规则守恒的是 Frobenius 范数 Σ<sub>ij</sub>(dα<sub>ij</sub>/dQ)²，
+不是 Raman 活性 45ᾱ′² + 7γ′²。</strong>后者是同样九个数的另一种组合（差一个各向异性权重），
+把求和规则写成活性形式看着很自然，但是错的。两者的桥梁是对称张量的恒等式
+Σ<sub>ij</sub>a<sub>ij</sub>² = 3ᾱ² + (2/3)γ²，单独断言。</p>
+
+<h2>5. 变异测试：16 个变异，全部触发</h2>
+<p>每一条新断言都必须能失败，否则它什么也没守住。变异分两组：纯函数组走
+<code>contract.raman_sections</code>，投影与求和规则组必须在真实计算上才有意义，走
+<code>contract.raman_payload_sections</code>——两者都是门自己运行的那段代码，不是副本。</p>
+
+<table>
+<thead><tr><th>变异</th><th>破坏什么</th><th>触发</th></tr></thead>
+<tbody>
+<tr><td class="n">R1</td><td>活性用 45ᾱ²+4γ²（退偏比的权重）</td><td class="n">2</td></tr>
+<tr><td class="n">R2</td><td>去掉各向异性交叉项上的因子 6</td><td class="n">3</td></tr>
+<tr><td class="n">R3</td><td>各向异性里用两次 xy、丢掉 zx</td><td class="n">3</td></tr>
+<tr><td class="n">R4</td><td>把 (xx−yy)² 写成 (xx−xy)²</td><td class="n">3</td></tr>
+<tr><td class="n">R5</td><td>ρ 分母里塞回活性的 7</td><td class="n">2</td></tr>
+<tr><td class="n">R6</td><td>ρ 分子丢掉因子 3</td><td class="n">2</td></tr>
+<tr><td class="n">R7</td><td>声称所有基组都没有弥散函数</td><td class="n">1</td></tr>
+<tr><td class="n">R8</td><td>声称所有基组都有弥散函数</td><td class="n">1</td></tr>
+<tr><td class="n">R9</td><td>拿掉 aug-cc-pVDZ 的 diffuse 标记</td><td class="n">1</td></tr>
+<tr><td class="n">R10</td><td>求和规则里去掉转动项</td><td class="n">1（残差 −11.5%）</td></tr>
+<tr><td class="n">R11</td><td>平动项设为 1（像偶极那样）</td><td class="n">1</td></tr>
+<tr><td class="n">R12</td><td>质量加权写成 m 而不是 1/m</td><td class="n">1（残差 −93.3%）</td></tr>
+<tr><td class="n">R13</td><td>dα/dQ 漏掉 bohr³→Å³ 因子</td><td class="n">1（残差 +4454%）</td></tr>
+<tr><td class="n">R14</td><td>求和规则里 α₀ 用 a.u.、其余用 Å³</td><td class="n">1（残差 −121%）</td></tr>
+<tr><td class="n">R15</td><td>永远把 α 报成可靠</td><td class="n">2</td></tr>
+<tr><td class="n">R16</td><td>让 Raman 活性跟着 IR 强度走</td><td class="n">4</td></tr>
+</tbody>
+</table>
+
+<p><strong>R4 值得单独说。</strong>它把 (xx−yy)² 换成 (xx−xy)²。在手算张量 diag(1,2,3) 上，
+xy = 0 使 (1−0)² = 1 恰好等于 (1−2)² = 1——纯函数断言<em>抓不到它</em>。抓到它的是旋转不变性：
+ᾱ 和 γ² 是二阶张量的不变量，旋转张量不该改变它们，而这个写错的公式在旋转下会变。200 个随机旋转
+把最坏偏差推到 &gt; 1e-9 之上，断言触发。这正是「在随机张量上测不变量」而不是「在手算样例上对答案」
+的理由。</p>
+
+<h2>6. 本轮我自己犯的错</h2>
+<table>
+<thead><tr><th>错误</th><th>后果</th><th>怎么发现的</th></tr></thead>
+<tbody>
+<tr><td><code>cphf.solve</code> 的 <code>h1</code> 用 (3, nvir·nocc) 打包三个场方向</td>
+    <td><code>ValueError: operands could not be broadcast together with shapes (3,65) (13,5)</code></td>
+    <td>读 <code>solve_nos1</code> 源码：<code>e_ai</code> 是 (nvir, nocc)，无法与 (3,65) 广播。改为逐方向求解。</td></tr>
+<tr><td>CPHF 的前置因子和符号靠推导</td>
+    <td>四个候选里三个给出错一倍或错号的张量，且都是对称正定的，看上去都合理</td>
+    <td>改为把 8 个组合全部拿去和有限场张量打分，只有 <code>+4/翻转</code> 命中（9e-6）。</td></tr>
+<tr><td><strong>contract.py 里的变量遮蔽</strong>：我新加的弥散基组小节复用了名字 <code>vres</code></td>
+    <td>300 行之后读取同一个 <code>vres</code> 的 IR 回归断言，拿到了 aug-cc-pVDZ 的结果——却顶着
+        「expected 79.6 at B3LYP/6-31G*」的标签报错</td>
+    <td><strong>门自己抓到的</strong>：3 条失败，数字 71.34/4.05/60.68 正是我 20 分钟前探针里的 aug-cc-pVDZ 值。
+        修复：新小节改用 <code>avres</code>，并给水的结果加了一个显式的 <code>vib_water</code> 绑定。</td></tr>
+<tr><td>批量替换脚本 <code>"        FAILURES.append(" → "        fail.append("</code> 作用到了整个文件</td>
+    <td>232 个调用点被误改，<code>main()</code>、<code>run()</code>、<code>check_*()</code> 全部指向未定义的
+        <code>fail</code></td>
+    <td>替换后立刻打印计数：<code>FAILURES.append count: 0</code>。用函数边界把改动限定在三个真正带
+        <code>fail</code> 形参的函数之外，逐函数核对后修复。</td></tr>
+<tr><td>变异测试跑的时候起了服务器</td>
+    <td>服务器<em>导入的是被改坏的 analysis.py</em>；浏览器门 26 项全过，但页面上的求和规则残差是
+        <strong>−93.33%</strong>——正是 R12 那个变异的签名。所有检查通过，所有数字都是错的。</td>
+    <td>读浏览器门的输出时看到 −93.33% 与 payload 的 −0.003% 不符。现在变异工具启动时先探测 8000 端口，
+        有人在听就拒绝运行（<code>exit=2</code>）。</td></tr>
+<tr><td>变异测试的基线一开始就失败</td>
+    <td><code>raman_spectrum</code> 是在 <code>server.py</code> 里拼的，直接调 <code>vibrations</code>
+        拿不到它</td>
+    <td>基线报 <code>Raman curve has 0 points</code>。修复顺带做了一次真正的去重：把两条曲线的构造
+        提成 <code>analysis.attach_vibrational_spectra()</code>，服务器、浏览器门和变异工具现在跑的是同一段代码。</td></tr>
+<tr><td>探针里 <code>gto.M(atom=&lt;XYZ 字符串&gt;)</code></td>
+    <td><code>ValueError: Zmatrix format error</code></td>
+    <td>字符串会被当作 z-matrix 解析。改为传元组列表。</td></tr>
+<tr><td>探针用单个 H 原子</td>
+    <td><code>RuntimeError: Electron number 1 and spin 0 are not consistent</code></td>
+    <td>改用 He（同样的闭壳层 <code>&lt;1s|z|1s&gt; = 1.0</code> 检验）。</td></tr>
+</tbody>
+</table>
+
+<h2>7. 本轮改动</h2>
+<ul>
+<li><code>backend/engine/dft.py</code> — <code>BASIS_SETS</code> 增加 4 个弥散基组；
+  新增 <code>basis_has_diffuse()</code>（按命名约定判定，并附实测理由）。</li>
+<li><code>backend/engine/analysis.py</code> — 新增 <code>BOHR3_TO_A3</code>、
+  <code>polarizability_tensor()</code>（CPHF）、<code>_dipole_alpha_at()</code>、
+  <code>raman_activity()</code>、<code>depolarization_ratio()</code>、
+  <code>raman_sum_rule()</code>、<code>raman_spectrum()</code>、
+  <code>attach_vibrational_spectra()</code>；<code>vibrations()</code> 增加
+  <code>with_raman</code> / <code>raman_max_atoms</code> 参数，在同一个位移循环里同时收偶极和极化率
+  （共享 SCF），返回 <code>raman</code> 载荷。</li>
+<li><code>backend/server.py</code> — <code>JobRequest</code> 增加 <code>with_raman</code>；
+  振动分支改为一行 <code>attach_vibrational_spectra(result)</code>（顺带去重）。</li>
+<li><code>backend/agent/planner.py</code> — <code>explain_vibrations()</code> 增加 Raman 小节：
+  活性与 ρ 的表格、两条谱线主导模式不一致时的说明、ρ 上限、求和规则残差、以及基组警告。</li>
+<li><code>frontend/static/index.html</code> — 振动面板新增 <code>#ramanWrap</code>（独立画布、
+  PNG/CSV 导出、<code>#ramanNote</code>、<code>#ramanTable</code>）与 <code>#ramanSkip</code>。</li>
+<li><code>frontend/static/js/app.js</code> — <code>renderRaman()</code>、<code>state.charts.raman</code>、
+  tab 切换时的 resize。</li>
+<li><code>frontend/static/css/app.css</code> — <code>.sub-head</code>、<code>#ramanNote strong.warn</code>。</li>
+<li><code>backend/contract.py</code> — 新增 <code>raman_sections()</code>（纯函数）、
+  <code>raman_payload_sections()</code>（载荷）、弥散基组绝对极化率小节、以及
+  「被跳过的 Raman 图必须说明原因」小节。</li>
+<li><code>backend/browser_raman.py</code>（新）— 26 项浏览器门。</li>
+<li><code>backend/mutate_raman.py</code>（新）— 16 个变异，并带 8000 端口占用检测。</li>
+<li><code>backend/gates.py</code> — 注册 <code>browser_raman</code>。</li>
+</ul>
+
+<h2>8. 门禁结果</h2>
+<table>
+<thead><tr><th>门</th><th>结果</th></tr></thead>
+<tbody>
+<tr><td>contract</td><td><span class="tag t-ok">48 / 48</span>（第 14 轮为 43；新增 5 段）</td></tr>
+<tr><td>browser_raman（新）</td><td><span class="tag t-ok">26 / 26，44 s</span></td></tr>
+<tr><td>check_selectors</td><td><span class="tag t-ok">PASS</span>（153 ids / 14 tabs ↔ 14 panes / 无重复 script src）</td></tr>
+<tr><td>mutate_raman</td><td><span class="tag t-ok">16 / 16 触发，源码逐字节还原</span></td></tr>
+</tbody>
+</table>
+
+<p class="sub">下一轮：核磁屏蔽（GIAO，需从零实现）与 ESP/MK 电荷拟合——这是「论文里要用的图」
+清单上最后两项。</p>
+
+</main>
+</body>
+</html>

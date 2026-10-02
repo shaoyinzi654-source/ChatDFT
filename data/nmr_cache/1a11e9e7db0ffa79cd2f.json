@@ -1,0 +1,52 @@
+{
+ "format": 3,
+ "key": "chloroform_f",
+ "label": "CFCl3",
+ "formula": "CCl3F",
+ "geometry": "C-Cl 1.7600 A x3; C-F 1.3300 A (the module's experimental geometry)",
+ "geometry_source": "builtin",
+ "geometry_signature": "e13b87e2d19e",
+ "geometry_documented": "C-F 1.330 A, C-Cl 1.760 A, tetrahedral (experimental r_e)",
+ "method": "1ba77afcbe6a3e7b",
+ "basis": "6-31g*",
+ "conv_tol": 1e-13,
+ "field_step_au": 0.0003,
+ "natm": 5,
+ "nao": 82,
+ "atoms_per_element": {
+  "C": 1,
+  "F": 1,
+  "Cl": 3
+ },
+ "element_shielding_ppm": {
+  "C": {
+   "sigma_iso_ppm": 83.52458840389308,
+   "spread_ppm": 0.0,
+   "n_equivalent": 1,
+   "per_atom_ppm": [
+    83.52458840389308
+   ]
+  },
+  "F": {
+   "sigma_iso_ppm": 273.07219925665595,
+   "spread_ppm": 0.0,
+   "n_equivalent": 1,
+   "per_atom_ppm": [
+    273.07219925665595
+   ]
+  },
+  "Cl": {
+   "sigma_iso_ppm": 553.1703770250684,
+   "spread_ppm": 0.00036983938605317235,
+   "n_equivalent": 3,
+   "per_atom_ppm": [
+    553.1701304657025,
+    553.1705003050886,
+    553.1705003044144
+   ]
+  }
+ },
+ "dE_dB_max": 0.0,
+ "tensor_asymmetry_max_ppm": 10.241888224396163,
+ "cached": false
+}

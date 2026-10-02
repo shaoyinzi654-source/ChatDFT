@@ -1,0 +1,136 @@
+=== what is each library geometry, really? ===
+
+reproducible: re-embedding from the SMILES rebuilds it to 1e-05 A
+dft         : it is a b3lyp/6-31g* stationary point
+foreign     : nothing here produced these coordinates
+
+entry                verdict        source                                        
+----------------------------------------------------------------------------------
+water                dft            DFT-optimised (B3LYP / 6-31G*)                
+                       re-embedding from its SMILES moves it 0.0005 A, so these coordinates are not from that pipeline; a B3LYP/6-31G* gradient at these coordinates is |g|rms 1.6e-04, |g|max 3.7e-04 hartree/bohr -- a stationary point
+water_dimer          dft            DFT-optimised (B3LYP / 6-31G*)                
+                       re-embedding from its SMILES moves it 2.8627 A, so these coordinates are not from that pipeline; a B3LYP/6-31G* gradient at these coordinates is |g|rms 3.5e-06, |g|max 8.4e-06 hartree/bohr -- a stationary point
+hydrogen             foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0320 A, so these coordinates are not from that pipeline; |g|rms 1.2e-03 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+methane              foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0041 A, so these coordinates are not from that pipeline; |g|rms 1.3e-03 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+ammonia              foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0035 A, so these coordinates are not from that pipeline; |g|rms 1.5e-03 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+benzene              foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0051 A, so these coordinates are not from that pipeline; |g|rms 1.3e-03 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+naphthalene          reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+ethylene             foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0127 A, so these coordinates are not from that pipeline; |g|rms 5.0e-03 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+acetylene            foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0069 A, so these coordinates are not from that pipeline; |g|rms 1.8e-03 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+formaldehyde         foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0276 A, so these coordinates are not from that pipeline; |g|rms 5.8e-03 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+acetone              reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+phenol               foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0748 A, so these coordinates are not from that pipeline; |g|rms 6.4e-03 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+pyridine             foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0931 A, so these coordinates are not from that pipeline; |g|rms 1.7e-02 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+furan                reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+pyrrole              reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+imidazole            reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+methanol             foreign        -                                             
+                       re-embedding from its SMILES moves it 0.6892 A, so these coordinates are not from that pipeline; |g|rms 4.1e-02 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+ethanol              reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+acetic_acid          foreign        -                                             
+                       re-embedding from its SMILES moves it 0.3786 A, so these coordinates are not from that pipeline; |g|rms 4.2e-02 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+glycine              foreign        -                                             
+                       re-embedding from its SMILES moves it 0.6484 A, so these coordinates are not from that pipeline; |g|rms 4.1e-02 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+caffeine             reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 1.00e-06 A
+aspirin              reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+nitrobenzene         foreign        -                                             
+                       re-embedding from its SMILES moves it 0.7801 A, so these coordinates are not from that pipeline; |g|rms 3.3e-02 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+aniline              foreign        -                                             
+                       re-embedding from its SMILES moves it 0.1739 A, so these coordinates are not from that pipeline; |g|rms 1.3e-02 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+styrene              foreign        -                                             
+                       re-embedding from its SMILES moves it 0.2464 A, so these coordinates are not from that pipeline; |g|rms 1.4e-02 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+toluene              foreign        -                                             
+                       re-embedding from its SMILES moves it 0.5606 A, so these coordinates are not from that pipeline; |g|rms 2.2e-02 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+chloroform           reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+dichloromethane      reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+tfa                  foreign        -                                             
+                       re-embedding from its SMILES moves it 0.5005 A, so these coordinates are not from that pipeline; |g|rms 1.1e-01 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+urea                 foreign        -                                             
+                       re-embedding from its SMILES moves it 0.3286 A, so these coordinates are not from that pipeline; |g|rms 4.8e-02 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+histamine            reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+ozone                foreign        -                                             
+                       re-embedding from its SMILES moves it 0.1720 A, so these coordinates are not from that pipeline; |g|rms 7.2e-02 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+co2                  foreign        -                                             
+                       re-embedding from its SMILES moves it 0.4840 A, so these coordinates are not from that pipeline; |g|rms 6.8e-03 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+carbon_monoxide      foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0001 A, so these coordinates are not from that pipeline; |g|rms 1.4e-02 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+nitrogen             foreign        -                                             
+                       re-embedding from its SMILES moves it 0.3620 A, so these coordinates are not from that pipeline; |g|rms 1.3e-02 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+nitric_oxide         foreign        -                                             
+                       re-embedding from its SMILES moves it 0.2729 A, so these coordinates are not from that pipeline; |g|rms 9.1e-03 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+sulfur_dioxide       foreign        -                                             
+                       re-embedding from its SMILES moves it 0.2848 A, so these coordinates are not from that pipeline; |g|rms 2.3e-02 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+methanethiol         foreign        -                                             
+                       re-embedding from its SMILES moves it 0.6860 A, so these coordinates are not from that pipeline; |g|rms 3.6e-02 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+hydroxide            foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0078 A, so these coordinates are not from that pipeline; |g|rms 8.8e-03 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+ammonium             foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0006 A, so these coordinates are not from that pipeline; |g|rms 1.1e-03 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+nitrate              foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0384 A, so these coordinates are not from that pipeline; |g|rms 3.5e-02 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+methyl_radical       foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0070 A, so these coordinates are not from that pipeline; |g|rms 1.4e-03 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+hydroxyl_radical     foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0078 A, so these coordinates are not from that pipeline; |g|rms 7.2e-03 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+oxygen               foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0571 A, so these coordinates are not from that pipeline; |g|rms 5.7e-03 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+porphine             reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 1.00e-06 A
+ethane               reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 1.00e-06 A
+propane              reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+butane               reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 1.00e-06 A
+isobutane            reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+pentane              reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+hexane               reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+cyclohexane          reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+butadiene            reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+cyclohexene          reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+thiophene            reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+pyrazine             reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+pyrimidine           reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+hydrogen_fluoride    foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0038 A, so these coordinates are not from that pipeline; |g|rms 2.5e-02 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+hydrogen_chloride    foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0038 A, so these coordinates are not from that pipeline; |g|rms 2.3e-02 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+silane               reproducible   MMFF94 (RDKit ETKDGv3)                        
+                       re-embeds to 0.00e+00 A
+borane               foreign        -                                             
+                       re-embedding from its SMILES moves it 0.0206 A, so these coordinates are not from that pipeline; |g|rms 6.0e-03 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+ammonia_borane       foreign        -                                             
+                       re-embedding from its SMILES moves it 0.2673 A, so these coordinates are not from that pipeline; |g|rms 1.6e-02 hartree/bohr at B3LYP/6-31G*, so nothing here produced these coordinates
+
+dft           : 2
+foreign       : 35
+reproducible  : 25

@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChatDFT 审计 · 第 16 轮 — GIAO 核磁屏蔽：缓存、坐标轴与谱线</title>
+<style>
+  :root {
+    --ink: #1b1f24; --muted: #5b6570; --line: #e2e6ea; --bg: #ffffff;
+    --soft: #f6f8fa; --warn: #9a5b00; --warnbg: #fdf3e3;
+    --ok: #1a7f37; --okbg: #eaf6ec; --bad: #b42318; --badbg: #fdeceb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.65 -apple-system, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", Roboto, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 28px 80px; }
+  h1 { font-size: 27px; margin: 0 0 6px; letter-spacing: -.2px; }
+  .sub { color: var(--muted); margin: 0 0 34px; font-size: 14px; }
+  h2 { font-size: 19px; margin: 42px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 26px 0 8px; }
+  p { margin: 10px 0; }
+  code { background: var(--soft); padding: 1px 5px; border-radius: 4px;
+    font-family: "SFMono-Regular", Consolas, monospace; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0;
+    font-size: 14px; }
+  th, td { text-align: left; padding: 9px 11px; border: 1px solid var(--line);
+    vertical-align: top; }
+  th { background: var(--soft); font-weight: 600; }
+  td.n { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    white-space: nowrap; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 12px; font-weight: 600; }
+  .t-ok { background: var(--okbg); color: var(--ok); }
+  .t-bad { background: var(--badbg); color: var(--bad); }
+  .t-warn { background: var(--warnbg); color: var(--warn); }
+  .note { background: var(--warnbg); border-left: 3px solid #f0c99a;
+    padding: 10px 14px; margin: 16px 0; font-size: 14px; }
+  .quote { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    background: var(--soft); padding: 10px 12px; border-radius: 6px;
+    overflow-x: auto; margin: 10px 0; color: #333; }
+  ul { padding-left: 22px; } li { margin: 5px 0; }
+  .kpi { display: flex; gap: 14px; flex-wrap: wrap; margin: 18px 0 4px; }
+  .kpi div { flex: 1 1 150px; border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 14px; background: var(--soft); }
+  .kpi b { display: block; font-size: 21px; }
+  .kpi span { font-size: 12.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>第 16 轮：GIAO 核磁屏蔽 — 缓存、坐标轴与谱线</h1>
+<p class="sub">前四轮的教训都是「被归一化到自身最大值的图，看不见整体性的标度错误」。
+这一轮换了一种形状：<strong>图看起来完全正确，因为错的不是标度，是采样</strong>。一条 1 Hz 的
+洛伦兹线在 12 ppm 的窗口里只有 <em>0.36</em> 个网格点宽——曲线仍然是洛伦兹线在网格点上的值，
+归一化仍然把它顶到 1，但两个<em>等价</em>的核会被画成 1.01 到 1.72 倍不等的高度差。这个错误
+在图上不留痕迹，只在相对强度里。</p>
+
+<div class="kpi">
+  <div><b>0 次</b><span>参考缓存命中次数：五个文件全部截断，缓存从未工作过</span></div>
+  <div><b>4829 s</b><span>因此每次 NMR 作业都要重算 TMS 的实测耗时</span></div>
+  <div><b>1.01–1.72</b><span>两个等价 ¹H 被画成的高度比（应为 1.0000）</span></div>
+  <div><b>18/24</b><span>原子书写顺序不同给出不同积分分组的排列数</span></div>
+</div>
+
+<h2>1 · 参考缓存从来没有工作过（本轮最严重）</h2>
+
+<p>NMR 的化学位移是 <code>δ = σ(参考) − σ(样品)</code>，参考必须用同一份代码、同一级别算出来。
+TMS（¹H/¹³C 的标准）是 17 个原子、6-31G* 下 nao = 98，代价和整个分子一样，所以设计上是
+「算一次、存盘、之后读缓存」。<code>data/nmr_cache/</code> 里有五个文件。</p>
+
+<p>实测这五个文件：<strong>全部是无效 JSON</strong>，而且截断在<em>同一个字节</em>。</p>
+
+<div class="quote">$ for f in data/nmr_cache/*.json; do ... json.load ... done
+0cb66c4366b3a321fcbe.json INVALID: JSONDecodeError Expecting value: line 11 column 9 (char 240)
+777a8aaf3b4e187c3e61.json INVALID: JSONDecodeError Expecting value: line 11 column 9 (char 223)
+ab1718f37bbcbee0e9db.json INVALID: JSONDecodeError Expecting value: line 11 column 9 (char 222)
+c74ad3994820a6d6996a.json INVALID: JSONDecodeError Expecting value: line 11 column 9 (char 221)
+e081ba0aae5f4e5a0424.json INVALID: JSONDecodeError Expecting value: line 11 column 9 (char 246)
+
+$ tail -c 40 data/nmr_cache/e081ba0aae5f4e5a0424.json | od -c | tail -3
+0000140   \r  \n       "   n   a   t   m   "   :       1   7   ,  \r  \n
+0000160       "   n   a   o   "   :   <span style="color:#b42318">␣</span>
+0000170
+</div>
+
+<p>截断点正好在 <code>"nao": </code> 之后。原因是两层：</p>
+
+<ol>
+  <li><code>mol.nao_nr()</code> 返回的是 <code>numpy.int64</code>，不是 <code>int</code>。
+      <code>json.dump</code> 对它抛 <code>TypeError</code>——而且是在<em>写完键名之后</em>才抛，
+      所以磁盘上留下的文件停在 <code>"nao": </code>。</li>
+  <li>写文件那段被包在 <code>except Exception: pass</code> 里。异常被吃掉，函数照常返回结果，
+      <strong>没有任何东西说过一句话</strong>。</li>
+</ol>
+
+<div class="quote">mol.nao_nr()      -> np.int64(18) &lt;class 'numpy.int64'&gt;
+json.dumps FAILED: TypeError Object of type int64 is not JSON serializable</div>
+
+<p>后果是可以量化的：缓存永远命中不了，于是<strong>每一次 NMR 作业都要把 TMS 重算一遍</strong>。
+实测这台机器上 TMS 在换页状态下用了 <strong>4829.5 秒（80 分钟）</strong>；同一台机器空闲时是
+285 秒。对一个交互式软件来说，第一次点「13C NMR」就等于挂死。</p>
+
+<h3>修法（四处，缺一不可）</h3>
+<ul>
+  <li><code>int(mol.nao_nr())</code>——在构造处转换，这才是真正的修复；</li>
+  <li><code>_json_default()</code>——对 <code>np.generic</code> / <code>np.ndarray</code> 兜底，
+      下一个被加进载荷的 numpy 标量不会再用同样的方式炸掉；</li>
+  <li><code>_write_cache_atomic()</code>——先写临时文件再 <code>os.replace</code>，
+      并<strong>返回错误字符串而不是吞掉它</strong>；载荷里出现 <code>cache_error</code> 就说明写失败；</li>
+  <li><code>_read_cache()</code>——校验 <code>format</code> 与必需字段，截断文件/旧版文件一律返回
+      「重新计算」，绝不半读。</li>
+</ul>
+
+<p>实测（水，6-31G*）：</p>
+<table>
+  <tr><th>步骤</th><th>修复前</th><th>修复后</th></tr>
+  <tr><td>第一次调用（计算并写缓存）</td><td class="n">4.6 s，文件被截断</td><td class="n">4.6 s，文件完整</td></tr>
+  <tr><td>第二次调用</td><td class="n">4.6 s（重新计算）</td><td class="n"><strong>0.00 s（命中）</strong></td></tr>
+  <tr><td>缓存文件大小</td><td class="n">221–246 字节（截断）</td><td class="n">759–969 字节（合法 JSON）</td></tr>
+</table>
+
+<p>顺带修好了 <code>gen_nmr_cache.py</code>：它原来是<em>自己</em>写 <code>json.dump(res, ...)</code>，
+所以即使引擎修好了，生成缓存的脚本仍然会写坏文件。现在两条路径共用同一个原子写入器。</p>
+
+<h2>2 · 一张谱图里同时放 ¹³C 和 ¹H</h2>
+
+<p>NMR 谱是<em>针对某一种核</em>采集的。¹H 窗口约 12 ppm，¹³C 约 220 ppm。而
+<code>compute()</code> 把分子里所有核放进<strong>一次</strong> <code>nmr_spectrum()</code> 调用，
+用<strong>一个</strong>以 ¹H 频率为准的线宽。甲醇实测（6-31G*）：</p>
+
+<div class="quote">groups: [('17O', -32.599, 1)]          &lt;-- 见第 3 节，13C/1H 当时没有参考
+ONE spectrum for all of it:
+  window   -33.099 .. -32.099 ppm   (2000 points)
+  linewidth 1.0 Hz at 400.0 MHz  ->  0.00250 ppm HWHM</div>
+
+<p>两个独立的错误叠在一起：</p>
+<ul>
+  <li><strong>窗口</strong>：13C 的 30 ppm 和 ¹H 的 3 ppm 挤在一根轴上，谁也读不出来；</li>
+  <li><strong>线宽</strong>：1 ppm = 观测核的拉莫尔频率。谱仪是按 ¹H 命名的（「400 MHz 机器」），
+      所以 <code>B₀ = 400/γ(¹H)</code>，而 ¹³C 在同一条谱线上进动在
+      <code>400 × 10.7084/42.5775 = 100.60 MHz</code>。用 ¹H 的频率去画 ¹³C，线宽会窄 4 倍——
+      而线宽正是决定网格点数的量。</li>
+</ul>
+
+<p>修法：<code>compute()</code> 现在按同位素分别建谱，每个同位素用自己的拉莫尔频率与自己的窗口，
+载荷给 <code>spectra: {"1H": {...}, "13C": {...}}</code>、<code>spectrum_isotope</code>（有 ¹H 时
+默认 ¹H）以及 <code>spectrum</code>（默认那一条，兼容旧调用方）。前端加了一排同位素切换按钮。</p>
+
+<h2>3 · 网格分辨不了谱线</h2>
+
+<p>这是本轮最隐蔽的一个。<code>nmr_spectrum</code> 原来固定取 2000 点铺满窗口。窗口宽度由分子
+自己的位移跨度决定，所以<strong>步长是一个分子的性质</strong>：</p>
+
+<table>
+  <tr><th>窗口跨度</th><th>点数</th><th>步长 (ppm)</th><th>步长 / 半高半宽</th><th>一条线有几个点高于半高</th></tr>
+  <tr><td class="n">2 ppm</td><td class="n">2000</td><td class="n">0.00150</td><td class="n">0.60</td><td class="n">6</td></tr>
+  <tr><td class="n">4 ppm</td><td class="n">2000</td><td class="n">0.00250</td><td class="n">1.00</td><td class="n">4</td></tr>
+  <tr><td class="n">8 ppm</td><td class="n">2000</td><td class="n">0.00464</td><td class="n">1.86</td><td class="n"><span class="tag t-bad">2</span></td></tr>
+  <tr><td class="n">12 ppm</td><td class="n">2000</td><td class="n">0.00696</td><td class="n">2.79</td><td class="n"><span class="tag t-bad">2</span></td></tr>
+  <tr><td class="n">20 ppm</td><td class="n">2000</td><td class="n">0.01161</td><td class="n">4.64</td><td class="n"><span class="tag t-bad">2</span></td></tr>
+</table>
+
+<p>步长大于线宽时，画出来的<em>不是</em>一条粗一点的洛伦兹线，而是<strong>另一个函数</strong>：
+每条线被采样在自己翼上的某一点，而曲线又按自身最大值归一化。单个线看不出问题（归一化把
+采样值顶到 1），<strong>两条线放在一起就露馅</strong>。两个 ¹H，各一个核、同样的线宽、相距
+0.5 ppm（分组容差 0.05 ppm，所以确实报成两个信号），窗口钉在 0–12 ppm，把这一对整体滑过
+一个网格步长：</p>
+
+<div class="quote">    pair at  maxima    left h   right h    ratio    A offset  B offset
+    5.00000       2   1.00000   0.63496   1.5749    +0.00074  +0.00211
+    5.00139       2   1.00000   0.98662   1.0136    -0.00065  +0.00072
+    5.00348       2   0.59055   1.00000   1.6933    -0.00274  -0.00137
+    5.00418       2   0.58241   1.00000   1.7170    -0.00344  -0.00207
+    5.00627       2   1.00000   0.58835   1.6997    +0.00144  +0.00281
+</div>
+
+<p>两个<em>构造上完全相等</em>的信号，被画成 1.01 到 <strong>1.72</strong> 倍的高度差——
+差别只在于它们落在网格的哪个位置。这张图上的相对强度是网格的产物，不是分子的性质。</p>
+
+<div class="note"><strong>为什么一开始抓不到它。</strong>第一版探针把两条线放在窗口的<em>两端</em>，
+两端的偏移是镜像的，所以即使高度错了也相等；而窗口是
+<code>linspace(min−pad, max+pad, points)</code>，把所有位移整体平移会<em>带着网格一起平移</em>，
+于是刚性平移在原理上就看不见采样偏移。必须把窗口钉住（<code>wmin</code>/<code>wmax</code>），
+才能让一条线真正落在两个网格点之间。</div>
+
+<h3>修法</h3>
+<p>点数由线宽导出，不再固定。判据用解析式：洛伦兹线在偏移 <code>d</code> 处的高度是
+<code>hwhm²/(d²+hwhm²)</code>，最坏偏移是半个步长，要求误差 ≤ 1% 即
+<code>step ≤ hwhm/5</code>，也就是 <code>POINTS_PER_HWHM = 5</code>。上限
+<code>MAX_SPECTRUM_POINTS = 30000</code>；顶到上限时<strong>把线加宽到网格能画的最窄宽度，
+并在载荷和图注里同时给出请求宽度与实际宽度</strong>，而不是画一条和图注不符的线。</p>
+
+<table>
+  <tr><th></th><th>修复前</th><th>修复后</th></tr>
+  <tr><td>12 ppm 窗口的点数</td><td class="n">2000</td><td class="n">27841</td></tr>
+  <tr><td>步长 / 半高半宽</td><td class="n">2.79</td><td class="n">0.20（5.0 点/半高半宽）</td></tr>
+  <tr><td>两个等价信号的高度比</td><td class="n">1.0136 – 1.7170</td><td class="n"><strong>1.0000（11 个位置全部）</strong></td></tr>
+  <tr><td>局部极大值个数</td><td class="n">2（偶然）</td><td class="n">2（构造保证）</td></tr>
+</table>
+
+<h2>4 · 图注承诺了从来没人画的 stick</h2>
+
+<p>前端图注原文：</p>
+<div class="quote">Lorentzian lines of 1 Hz at 400 MHz; <strong>the sticks are placed at the
+computed isotropic shift of each group, with the integral as height</strong>.</div>
+
+<p>而 <code>renderNmr()</code> 只画了那条洛伦兹包络——整个前端没有一处读过
+<code>spectrum.sticks</code>（全项目 grep 只有那行图注本身）。更糟的是 contract 里有一条断言
+专门检查 <code>sticks</code> 字段存在（<code>backend/contract.py:953</code>），
+于是<strong>闸门替一个没有消费者的字段背书</strong>。这是第 5 轮「UV-Vis 曲线算了却没人画」的
+同一个形状，而这一轮它被一条断言掩盖住了。</p>
+
+<p>修法：stick 现在带 <code>rel_intensity</code>（相对于最高峰的积分，最高峰为 1，与归一化后的
+曲线共用一根轴），前端用一个 Chart.js 插件在包络之上画红色竖线，图注改成描述实际画出来的东西，
+并同时给出同位素、线宽、网格步长与「几个点/半高半宽」。</p>
+
+<h2>5 · 分组依赖原子的书写顺序</h2>
+
+<p><code>group_equivalent()</code> 是「位移相差在容差内就算等价」的启发式分组（真正的等价性是
+对称性，文档里已经写明这是启发式）。第一版按输入顺序逐个和组的<strong>滑动平均</strong>比较。
+滑动平均会链式合并：0.09 → 0.06（均值 0.075）→ 0.03（差 0.045，通过）→ 0.00（差 0.06，不通过），
+结果是一个跨 0.06 ppm 的组——比它拿到的 0.05 ppm 容差还宽。</p>
+
+<table>
+  <tr><th>位移 0.00 / 0.03 / 0.06 / 0.09，容差 0.05 ppm</th><th>修复前</th><th>修复后</th></tr>
+  <tr><td>24 种书写顺序中给出 (1,3) 的</td><td class="n">18 种</td><td class="n">0 种</td></tr>
+  <tr><td>给出 (2,2) 的</td><td class="n">6 种</td><td class="n">24 种</td></tr>
+  <tr><td>最大组内跨度</td><td class="n">0.060 ppm（&gt; 容差）</td><td class="n">0.030 ppm</td></tr>
+</table>
+
+<p>修法：先按位移降序排序（以原子序号做稳定 tie-break），再以<strong>组首元素为锚</strong>比较。
+排序让结果只依赖位移的多重集，锚定让「跨度不超过容差」成为可保证的性质。载荷里额外给出
+<code>tol_ppm</code>、<code>spread_ppm</code>、<code>fraction</code>，叙述里也写明了这两点。</p>
+
+<h2>6 · 没有参考的核被静默丢掉</h2>
+
+<p>参考算不出来时（这台机器上是内存不足），<code>compute()</code> 捕获异常、加一条 warning，
+然后那个元素的 <code>delta_ppm</code> 保持 <code>None</code>。后果是：甲醇的 ¹³C 和 ¹H
+<strong>完全没有位移</strong>，而图上只剩一条 ¹⁷O 的线——看起来像「甲醇的 NMR 长这样」。</p>
+
+<p>而内存门槛本身是<em>看机器心情</em>的：TMS 需要 5165 MB，守卫要求空闲物理内存 &gt; 6457 MB。
+同一台机器在 23:01 能算出来、在 08:13 算不出来，同一个作业的结果就不同。这不是确定性行为。</p>
+
+<p>修法（三条）：</p>
+<ul>
+  <li>载荷新增 <code>unreferenced_elements</code>，warning 明确写「这些核<em>没有</em>位移，
+      不是位移为零」；前端加红色芯片 <em>no reference</em>；</li>
+  <li>contract 断言 <code>unreferenced_elements</code> 必须<strong>恰好等于</strong>「有 NMR 活性
+      但没有参考」的元素集合（不能恒为空，也不能是整分子），并在缺失时给出可执行的修复命令；</li>
+  <li>新增 <code>CHATDFT_NMR_ALLOW_SWAP=1</code>：显式接受换页，用来<em>专门</em>生成参考缓存。
+      默认仍然严格——把 5 分钟变成 1 小时不该是静默发生的。</li>
+</ul>
+
+<div class="note"><strong>我自己在这一轮埋的坑，被变异测试抓到。</strong>把分组改成「先排序」之后，
+排序发生在过滤 <code>delta_ppm is None</code> <em>之前</em>，于是 <code>float(None)</code> 抛
+<code>TypeError</code>。而这恰好<em>只</em>在「参考算不出来」这条路径上发生——也就是这台机器
+当下的状态。变异测试的 baseline 直接崩了，把它抓了出来。修复：先过滤再排序。</div>
+
+<h2>7 · 变异测试：14 个断言全部证明能失败</h2>
+
+<p>项目规则是「不能失败的断言不守卫任何东西」。<code>backend/mutate_nmr.py</code> 逐个破坏，
+再跑<strong>闸门真正使用的那些函数</strong>（<code>contract.nmr_sections</code> /
+<code>nmr_payload_sections</code>），看预期的那条消息是否真的出现。</p>
+
+<table>
+  <tr><th>变异</th><th>破坏什么</th><th>结果</th></tr>
+  <tr><td class="n">N1</td><td><code>_json_default</code> 不再转换 numpy 标量</td><td class="n"><span class="tag t-ok">4 条失败</span></td></tr>
+  <tr><td class="n">N2</td><td>写缓存静默什么都不写（旧行为）</td><td class="n"><span class="tag t-ok">1 条</span></td></tr>
+  <tr><td class="n">N3</td><td>去掉 <code>os.replace</code>，不再原子</td><td class="n"><span class="tag t-ok">2 条</span></td></tr>
+  <tr><td class="n">N4</td><td>读缓存不校验 <code>format</code></td><td class="n"><span class="tag t-ok">1 条</span></td></tr>
+  <tr><td class="n">N5</td><td>读缓存不校验必需字段</td><td class="n"><span class="tag t-ok">1 条</span></td></tr>
+  <tr><td class="n">N6</td><td>ppm 标度取负</td><td class="n"><span class="tag t-ok">2 条</span></td></tr>
+  <tr><td class="n">N7</td><td>分组改回滑动平均</td><td class="n"><span class="tag t-ok">1 条</span></td></tr>
+  <tr><td class="n">N8</td><td>分组不排序，按输入顺序</td><td class="n"><span class="tag t-ok">2 条</span></td></tr>
+  <tr><td class="n">N9</td><td>网格退回固定 2000 点</td><td class="n"><span class="tag t-ok">2 条</span></td></tr>
+  <tr><td class="n">N10</td><td>每半高半宽只要 0.5 个点</td><td class="n"><span class="tag t-ok">2 条</span></td></tr>
+  <tr><td class="n">N11</td><td>点数上限压到 100（强制加宽线）</td><td class="n"><span class="tag t-ok">4 条</span></td></tr>
+  <tr><td class="n">N12</td><td>所有核都用 ¹H 的拉莫尔频率</td><td class="n"><span class="tag t-ok">3 条</span></td></tr>
+  <tr><td class="n">N13</td><td>stick 高度用原始计数而非相对最高</td><td class="n"><span class="tag t-ok">2 条</span></td></tr>
+  <tr><td class="n">N14</td><td>完全不返回 stick</td><td class="n"><span class="tag t-ok">2 条</span></td></tr>
+  <tr><td class="n">N15–N18</td><td>单轴混放 / 忽略逐同位素频率 / 默认不开 ¹H / 谎报没有缺失参考</td><td class="n"><span class="tag t-warn">SKIPPED（见下）</span></td></tr>
+</table>
+
+<p><strong>如实记录：N15–N18 没有跑成。</strong>它们需要一份真实的载荷，而水的 ¹H 需要 TMS 参考，
+这台机器空闲物理内存不足（5165 MB 需求 vs 当时 425 MB 空闲），守卫按设计拒绝了。变异测试因此
+把这一组标成 <code>SKIPPED</code> 并打印原因，而不是算作通过——「没跑过的断言」不等于「通过的断言」。</p>
+
+<h3>我写错的两个变异（第一次跑时 0 条触发）</h3>
+<ul>
+  <li><strong>N2</strong> 原本改的是 <code>return f"{type(exc).__name__}: {exc}"</code>，
+      但基线里写操作本来就会成功，那条错误路径根本走不到。改成「静默不写」才复现了真实症状。</li>
+  <li><strong>N14</strong> 原本写成 <code>[] or [ {...} ]</code>，Python 求值结果是后者，等于没改。
+      改成 <code>for g in []</code> 才真的清空。</li>
+  <li><strong>N7</strong> 一开始也 0 条触发，但那是<em>断言太弱</em>：跨度断言只作用在
+      <code>wide</code>（0.00/0.04/0.09）上，而那组数据里滑动平均和锚定给出同样的结果。
+      把跨度断言加到真正能区分的 <code>chain</code>（0.00/0.03/0.06/0.09）上之后才抓住。</li>
+</ul>
+
+<h2>8 · 参考缓存的实际状态</h2>
+
+<table>
+  <tr><th>参考</th><th>用于</th><th>nao</th><th>峰值内存</th><th>状态</th></tr>
+  <tr><td>TMS Si(CH₃)₄</td><td>¹H / ¹³C / ²⁹Si</td><td class="n">98</td><td class="n">5165 MB</td><td class="n"><span class="tag t-warn">生成中</span></td></tr>
+  <tr><td>CFCl₃</td><td>¹⁹F</td><td class="n">82</td><td class="n">2532 MB</td><td class="n"><span class="tag t-ok">已缓存 114 s</span></td></tr>
+  <tr><td>H₂O</td><td>¹⁷O</td><td class="n">18</td><td class="n">6 MB</td><td class="n"><span class="tag t-ok">已缓存</span></td></tr>
+  <tr><td>NH₃</td><td>¹⁴N</td><td class="n">20</td><td class="n">9 MB</td><td class="n"><span class="tag t-ok">已缓存 1.5 s</span></td></tr>
+  <tr><td>PH₃</td><td>³¹P</td><td class="n">24</td><td class="n">19 MB</td><td class="n"><span class="tag t-ok">已缓存 0.5 s</span></td></tr>
+  <tr><td>CH₄</td><td>（对照）</td><td class="n">22</td><td class="n">5 MB</td><td class="n"><span class="tag t-ok">已缓存 0.4 s</span></td></tr>
+</table>
+
+<p>缓存的数值与修复前逐位一致（NH₃ ¹⁴N 263.658、PH₃ ³¹P 620.111、CH₄ ¹³C 200.671、CFCl₃ ¹⁹F
+273.072），所以这一轮的改动没有动到屏蔽张量本身——只动了它怎么被存下来。</p>
+
+<h2>9 · 关于内存守卫的一个判断</h2>
+
+<p>TMS 需要 5165 MB，其中 2214 MB 是 <code>int2e_ig1</code>（三个场方向 × nao⁴）——而
+<code>_giao_eri</code> 每次<em>只用一个方向</em>。理论上按方向惰性构建可以把峰值降到约
+3690 MB。实测 <code>mol.intor('int2e_ig1', comp=t)</code> <strong>不支持分量选择</strong>
+（返回形状 <code>(0, nao, nao, nao, nao)</code>），所以这条路要改成按壳层分块构建，属于
+对已验证算符路径的重构，本轮<strong>没有做</strong>——不是判断它不值得做，而是不愿意在没有
+独立验证的前提下动一个已经和实验对上（¹⁷O 329.60 vs 344.0、¹⁴N 263.16 vs 264.0）的路径。
+记为下一轮的候选。</p>
+
+<h2>10 · 本轮改动文件</h2>
+<ul>
+  <li><code>backend/engine/nmr.py</code> — 原子写缓存 + <code>_json_default</code> +
+      <code>_read_cache</code> 校验 + <code>int()</code> 转换；<code>larmor_mhz()</code>；
+      网格由线宽导出；stick 带 <code>rel_intensity</code>；分组锚定且确定；
+      <code>compute()</code> 逐同位素建谱；<code>unreferenced_elements</code>；
+      <code>ALLOW_SWAP</code>；先过滤再排序</li>
+  <li><code>backend/gen_nmr_cache.py</code> — 走同一个原子写入器，写失败要报错</li>
+  <li><code>backend/contract.py</code> — 缓存往返/原子性/截断/旧版/缺字段五组断言；
+      分组确定性与跨度；网格分辨率与等价双线高度比；拉莫尔频率与逐同位素线宽；
+      stick 高度；逐同位素谱与默认轴</li>
+  <li><code>backend/mutate_nmr.py</code>（新增）— 18 个变异 + 端口守卫 + 逐字节还原校验</li>
+  <li><code>backend/browser_nmr.py</code> — 同位素选择器、切换后坐标轴改变、stick 已交给图表</li>
+  <li><code>backend/agent/planner.py</code> — 叙述报告逐同位素窗口/频率/网格分辨率/缺失参考</li>
+  <li><code>frontend/static/index.html</code>、<code>js/app.js</code> —
+      <code>#nmrIsotope</code>、<code>nmrSticks</code> 插件、图注重写、缺失参考芯片</li>
+  <li><code>README.md</code> — 新增「论文要用的图」总表与 NMR/Raman 的诚实性说明</li>
+</ul>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,261 @@
+{
+ "id": "165af87255",
+ "brief": {
+  "text": "design 3 molecules containing an amine, logP below 3",
+  "goal": "design 3 molecules containing an amine, logP below 3",
+  "n_candidates": 3,
+  "generations": 1,
+  "dft_top": 1,
+  "max_atoms": 30,
+  "min_atoms": 3,
+  "max_molwt": null,
+  "min_molwt": null,
+  "max_logp": 3.0,
+  "min_logp": null,
+  "allowed_elements": null,
+  "forbidden_elements": [],
+  "required_smarts": [
+   "[NX3;H2,H1,H0;!$(N=*)]"
+  ],
+  "forbidden_smarts": [],
+  "seeds": [],
+  "seed_focus": [],
+  "seed_names": [],
+  "functional": "b3lyp",
+  "basis": "6-31g*",
+  "notes": [],
+  "has_numeric": true,
+  "alert_filter": "none",
+  "optimize_leads": false,
+  "targets": [
+   {
+    "key": "logp",
+    "aim": "min",
+    "weight": 1.0,
+    "low": null,
+    "high": 3.0,
+    "value": null,
+    "label": "logP (lipophilicity)"
+   }
+  ]
+ },
+ "candidates": [
+  {
+   "smiles": "NC(=O)N[N+](=O)[O-]",
+   "name": "CH3N3O3",
+   "rationale": "",
+   "origin": "mutation",
+   "descriptors": {
+    "formula": "CH3N3O3",
+    "atoms": 7,
+    "heavy_atoms": 7,
+    "values": {
+     "molwt": 105.1,
+     "logp": -1.15,
+     "tpsa": 98.26,
+     "hbd": 2.0,
+     "hba": 3.0,
+     "rotb": 1.0,
+     "rings": 0.0,
+     "arom_rings": 0.0,
+     "fsp3": 0.0,
+     "heavy": 7.0,
+     "mr": 19.71,
+     "sa": 3.15,
+     "qed": 0.325
+    },
+    "alerts": {
+     "BRENK": [
+      "nitro_group",
+      "N-nitroso",
+      "Oxygen-nitrogen_single_bond"
+     ]
+    },
+    "alert_count": 3
+   },
+   "dft": {
+    "energy_hartree": -429.7090623427674,
+    "homo_ev": -7.4518463908456125,
+    "lumo_ev": -2.0469956123329474,
+    "gap_ev": 5.404850778512665,
+    "dipole": 5.423080349834307,
+    "functional": "b3lyp",
+    "functional_label": "B3LYP (hybrid)",
+    "basis": "6-31g*",
+    "basis_label": "6-31G* (polarised)",
+    "scf_seconds": 4.152,
+    "converged": true,
+    "natoms": 10,
+    "geometry_source": "MMFF94 (RDKit ETKDGv3)",
+    "optimized": false,
+    "opt_seconds": null,
+    "opt_backend": null,
+    "opt_steps": null,
+    "cached": true
+   },
+   "scoring": {
+    "score": 1.0,
+    "targets": [
+     {
+      "key": "logp",
+      "label": "logP (lipophilicity)",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "min",
+      "weight": 1.0,
+      "value": -1.154,
+      "desirability": 1.0
+     }
+    ],
+    "blocking": [],
+    "measured": true,
+    "scored": true
+   },
+   "qualified": true
+  },
+  {
+   "smiles": "NCCNOC(=O)CN",
+   "name": "C4H11N3O2",
+   "rationale": "",
+   "origin": "mutation",
+   "descriptors": {
+    "formula": "C4H11N3O2",
+    "atoms": 9,
+    "heavy_atoms": 9,
+    "values": {
+     "molwt": 133.2,
+     "logp": -2.05,
+     "tpsa": 90.37,
+     "hbd": 3.0,
+     "hba": 5.0,
+     "rotb": 4.0,
+     "rings": 0.0,
+     "arom_rings": 0.0,
+     "fsp3": 0.75,
+     "heavy": 9.0,
+     "mr": 32.2,
+     "sa": 3.2,
+     "qed": 0.303
+    },
+    "alerts": {
+     "BRENK": [
+      "Aliphatic_long_chain",
+      "Oxygen-nitrogen_single_bond"
+     ]
+    },
+    "alert_count": 2
+   },
+   "dft": null,
+   "scoring": {
+    "score": 1.0,
+    "targets": [
+     {
+      "key": "logp",
+      "label": "logP (lipophilicity)",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "min",
+      "weight": 1.0,
+      "value": -2.048,
+      "desirability": 1.0
+     }
+    ],
+    "blocking": [],
+    "measured": false,
+    "scored": true
+   },
+   "qualified": true
+  },
+  {
+   "smiles": "N#COC(=O)CN",
+   "name": "C3H4N2O2",
+   "rationale": "",
+   "origin": "mutation",
+   "descriptors": {
+    "formula": "C3H4N2O2",
+    "atoms": 7,
+    "heavy_atoms": 7,
+    "values": {
+     "molwt": 100.1,
+     "logp": -1.03,
+     "tpsa": 76.11,
+     "hbd": 1.0,
+     "hba": 4.0,
+     "rotb": 1.0,
+     "rings": 0.0,
+     "arom_rings": 0.0,
+     "fsp3": 0.33,
+     "heavy": 7.0,
+     "mr": 20.76,
+     "sa": 3.57,
+     "qed": 0.337
+    },
+    "alerts": {
+     "BRENK": [
+      "cyanate_/aminonitrile_/thiocyanate"
+     ]
+    },
+    "alert_count": 1
+   },
+   "dft": null,
+   "scoring": {
+    "score": 1.0,
+    "targets": [
+     {
+      "key": "logp",
+      "label": "logP (lipophilicity)",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "min",
+      "weight": 1.0,
+      "value": -1.031,
+      "desirability": 1.0
+     }
+    ],
+    "blocking": [],
+    "measured": false,
+    "scored": true
+   },
+   "qualified": true
+  }
+ ],
+ "rejected": 16,
+ "generated": 76,
+ "dft_ran": 0,
+ "dft_cached": 1,
+ "generations": 1,
+ "origins": {
+  "seed": 4,
+  "mutation": 32,
+  "assembly": 24
+ },
+ "model_used": null,
+ "model_notes": [
+  "No language model is reachable, so this run is purely generative: library seeds, site substitution and fragment recombination. The design space is unaffected; only the chemistry commentary is missing."
+ ],
+ "seconds": 0.6,
+ "targets": [
+  {
+   "key": "logp",
+   "aim": "min",
+   "weight": 1.0,
+   "low": null,
+   "high": 3.0,
+   "value": null,
+   "label": "logP (lipophilicity)"
+  }
+ ],
+ "qualified": 60,
+ "requirements": [
+  "[NX3;H2,H1,H0;!$(N=*)]"
+ ],
+ "unmet_requirements": [],
+ "rejection_reasons": {
+  "missing required substructure [NX#;H#,H#,H#;!$(N=*)]": 16
+ },
+ "quality_checks": {
+  "sa_score": true,
+  "qed": true,
+  "alerts": true
+ }
+}

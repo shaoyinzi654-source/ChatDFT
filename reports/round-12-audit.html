@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChatDFT 审计 · 第 12 轮 — 红外强度不在绝对标度上</title>
+<style>
+  :root {
+    --ink: #1b1f24; --muted: #5b6570; --line: #e2e6ea; --bg: #ffffff;
+    --soft: #f6f8fa; --warn: #9a5b00; --warnbg: #fdf3e3;
+    --ok: #1a7f37; --okbg: #eaf6ec; --bad: #b42318; --badbg: #fdeceb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.65 -apple-system, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", Roboto, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 28px 80px; }
+  h1 { font-size: 27px; margin: 0 0 6px; letter-spacing: -.2px; }
+  .sub { color: var(--muted); margin: 0 0 34px; font-size: 14px; }
+  h2 { font-size: 19px; margin: 42px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 26px 0 8px; }
+  p { margin: 10px 0; }
+  code { background: var(--soft); padding: 1px 5px; border-radius: 4px;
+    font-family: "SFMono-Regular", Consolas, monospace; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0;
+    font-size: 14px; }
+  th, td { text-align: left; padding: 9px 11px; border: 1px solid var(--line);
+    vertical-align: top; }
+  th { background: var(--soft); font-weight: 600; }
+  td.n { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    white-space: nowrap; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 12px; font-weight: 600; }
+  .t-ok { background: var(--okbg); color: var(--ok); }
+  .t-bad { background: var(--badbg); color: var(--bad); }
+  .note { background: var(--warnbg); border-left: 3px solid #f0c99a;
+    padding: 10px 14px; margin: 16px 0; font-size: 14px; }
+  .quote { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    background: var(--soft); padding: 10px 12px; border-radius: 6px;
+    overflow-x: auto; margin: 10px 0; color: #333; }
+  ul { padding-left: 22px; } li { margin: 5px 0; }
+  .kpi { display: flex; gap: 14px; flex-wrap: wrap; margin: 18px 0 4px; }
+  .kpi div { flex: 1 1 150px; border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 14px; background: var(--soft); }
+  .kpi b { display: block; font-size: 21px; }
+  .kpi span { font-size: 12.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>第 12 轮审计：红外强度不在绝对标度上</h1>
+<p class="sub">PySCF 的简正模式<strong>已经</strong>做过质量加权，代码又除了一次 √m。
+氧原子被压到 1/4，而这条谱线被归一化到 100，画出来一模一样。</p>
+
+<div class="kpi">
+  <div><b>4.1×</b><span>氨的 N–H 伸缩强度误差</span></div>
+  <div><b>−9.2%</b><span>求和规则残差（水）</span></div>
+  <div><b>34 → 35</b><span>contract 检查段（+3 条断言）</span></div>
+  <div><b>10/10</b><span>闸门套件（14m08s）</span></div>
+</div>
+
+<h2>缺陷 · 简正模式被二次除 √m</h2>
+
+<p>红外强度是偶极矩对简正坐标的导数：<code>A = 42.256 · |dμ/dQ|²</code>。
+<code>Q</code> 的正确性完全取决于把 <code>dμ/dx</code> 投影到简正模式时用的权重。
+PySCF 在 <code>pyscf/hessian/thermo.py</code> 里给出的是：</p>
+
+<div class="quote">atom_coords = mol.atom_coords()                     # Bohr
+mass        = mol.atom_mass_list(isotope_avg=True) # amu
+norm_mode   = einsum('z,zri->izr', mass**-.5, mode)</div>
+
+<p>即 <code>norm_mode</code> <strong>已经</strong>是 <code>dx/dQ</code>，且因为 <code>mode</code>
+的列是 <code>eigh</code> 的酉特征向量，</p>
+
+<div class="quote">sum_a m_a * norm_mode[k,a]**2 == sum_a mode[k,a]**2 == 1   恒等于 1</div>
+
+<p>而原代码写的是：</p>
+
+<div class="quote">cart = modes[k] / np.sqrt(masses)[:, None]      # 第二次除 sqrt(m)
+norm = sqrt(sum_a m_a * cart**2)               # == sqrt(sum_a modes**2) ≈ 0.96
+dmudQ[k] = einsum("axc,ax->c", dmudx, cart / norm)</div>
+
+<p>注释里那个“PySCF 返回的模式没有归一化（0.92–0.96）”是真的，
+但<strong>量的对象错了</strong>：<code>Σ modes²</code> 本来就不该等于 1，
+该等于 1 的是 <code>Σ m_a·modes²</code>。于是那个“归一化”把
+<strong>每个原子的贡献按 1/√m_a 重新加权</strong>——水里的氧被压到 1/4，
+氢不动。这是<strong>质量相关</strong>的错误，没有任何单一比例因子能修。</p>
+
+<h3>为什么此前一直没被发现</h3>
+<p>因为画出来的曲线在绘图前被归一化到 100%。一个每条带都强 4 倍的谱，
+和一个正确的谱，<strong>在屏幕上完全一样</strong>。形状对，标度错，
+而标度恰恰是论文里唯一会被引用的东西。</p>
+
+<h3>裁决：一个不需要任何文献值的求和规则</h3>
+<p>在质量加权坐标下，正交变换保持平方和；3N−6 个振动模式加上 3 个平动、
+3 个转动恰好张满空间，所以</p>
+
+<div class="quote">sum_i |dμ/dQ_i|² = Σ_{a,k,α} (1/m_a)(∂μ_α/∂x_{a,k})²
+                  − (平动项) − (转动项)
+
+平动：中性分子平移不改偶极 → 0
+转动：绕主轴 j 转 dθ 使 μ 转过 |e_j × μ|，该方向的质量加权模长是 √I_j
+      → Σ_j |e_j × μ|² / I_j</div>
+
+<p>这个等式<strong>不涉及任何实测强度、任何单位约定</strong>，所以它无法被“调常数”满足。
+三个候选公式的结果：</p>
+
+<table>
+  <tr><th>分子</th><th>求和规则要求</th><th>现写法</th><th>补 Bohr→Å</th>
+      <th><code>modes</code> 原样</th></tr>
+  <tr><td>水</td><td class="n">2.39998</td>
+      <td class="n">2.17826 <span class="tag t-bad">−9.24%</span></td>
+      <td class="n">0.67230 <span class="tag t-bad">−71.99%</span></td>
+      <td class="n">2.40082 <span class="tag t-ok">+0.04%</span></td></tr>
+  <tr><td>HCl</td><td class="n">0.23849</td>
+      <td class="n">0.23404 <span class="tag t-bad">−1.87%</span></td>
+      <td class="n">0.06681 <span class="tag t-bad">−71.99%</span></td>
+      <td class="n">0.23859 <span class="tag t-ok">+0.04%</span></td></tr>
+  <tr><td>氨</td><td class="n">4.58080</td>
+      <td class="n">4.23566 <span class="tag t-bad">−7.53%</span></td>
+      <td class="n">1.28285 <span class="tag t-bad">−72.00%</span></td>
+      <td class="n">4.58115 <span class="tag t-ok">+0.01%</span></td></tr>
+</table>
+
+<p>单位是 <code>D²/(amu·Å²)</code>。<code>modes</code> 原样的残差是 0.01–0.04%，
+即纯有限差分噪声。<strong>顺便验证了一件事</strong>：Bohr 因子在把 Q 从
+<code>√amu·Bohr</code> 换算到 <code>√amu·Å</code> 时正好抵消，所以这里<strong>不该</strong>乘 0.529。</p>
+
+<h3>逐带误差</h3>
+<table>
+  <tr><th>分子</th><th>模式</th><th>正确</th><th>旧代码</th><th>倍数</th></tr>
+  <tr><td rowspan="3">水</td><td>弯曲</td><td class="n">79.57</td>
+      <td class="n">75.33</td><td class="n">0.95×</td></tr>
+  <tr><td>对称伸缩</td><td class="n">1.76</td><td class="n">0.91</td>
+      <td class="n">0.52×</td></tr>
+  <tr><td>反对称伸缩</td><td class="n">20.12</td><td class="n">15.81</td>
+      <td class="n">0.79×</td></tr>
+  <tr><td rowspan="3">氨</td><td>伞形</td><td class="n">159.59</td>
+      <td class="n">147.35</td><td class="n">0.92×</td></tr>
+  <tr><td>H–N–H 弯曲</td><td class="n">16.22</td><td class="n">13.37</td>
+      <td class="n">0.82×</td></tr>
+  <tr><td>N–H 伸缩</td><td class="n">0.33</td><td class="n">1.37</td>
+      <td><span class="tag t-bad">4.1×</span></td></tr>
+</table>
+
+<p>单位 km/mol。注意氨的 N–H 伸缩：旧代码把它算成<strong>强了 4 倍</strong>——
+因为氢的质量小，被 1/√m 抬得最高。也就是说，凡是“重原子骨架 + 轻原子伸缩”
+的模式，旧值都是系统性偏强的，而这类模式恰恰是有机分子红外谱里最常被讨论的。</p>
+
+<h2>常数本身是对的，我先怀疑错了对象</h2>
+<p>我一开始从第一性原理推这个 42.256，得到 18.35，差一个 ln 10，
+一度以为常数也错了。查证后确认：<strong>常数正确</strong>。Gaussian 官方换算表
+（被 Kragskow 的推导完整引用）写的是</p>
+
+<div class="quote">1 D²·Å⁻²·amu⁻¹ = 42.2561 km·mol⁻¹
+  = N_A/(12 ε₀ c²) · kg(u) · D²(C²Å²)
+
+"the integrated NAPIERIAN (natural logarithmic) absorbances"
+单位：∂μ/∂Q 为 [D Å⁻¹ u^(-1/2)]</div>
+
+<p>我的 18.35 是<strong>十进</strong>（decadic）版本；km/mol 这个单位在量化界
+约定俗成指<strong>自然对数</strong>版本，两者相差 ln 10 = 2.3026。
+这个约定现在写进了 <code>IR_KM_PER_MOL</code> 的注释和结果的
+<code>ir_intensity_units</code> 字段——否则一张图注无法说明自己的数字是哪种。</p>
+
+<div class="note"><strong>顺带清掉两个说谎的东西：</strong>
+<code>_dipole_at(..., dm0)</code> 收了一个密度矩阵参数，读代码的人会以为
+这里是<strong>冻结密度</strong>导数（缺轨道弛豫项）；实际上 <code>dm0</code>
+从未被使用，每个位移点都跑了完整 SCF——最坏的一种：承诺了一个便宜的近似，
+实际做了昂贵且正确的事。参数已删。
+另有一个从未被引用的 <code>DIPOLE_AU_TO_D_PER_A</code>，一并删除。</div>
+
+<h2>变异测试：第一次它没抓住</h2>
+<p>我把旧写法塞回去，闸门<strong>通过了</strong>。原因是我把求和规则写成了对
+<code>modes</code> 的<strong>并行重算</strong>，而不是对<strong>实际上报的强度</strong>的检查——
+守卫测的是副本，无论输出被怎么算出来都会通过。</p>
+<p>改成让残差直接由上报的 <code>ir_intensities_km_mol</code> 反推：</p>
+
+<div class="quote">vib = sum(intensities_km_mol) / IR_KM_PER_MOL</div>
+
+<p>再注入<strong>忠实</strong>的旧代码（逐模式归一化，我第一次注入时误写成全局归一化，
+残差 −70%，比真实的 −9% 夸张，不算数）。这次两条消息都按预期触发：</p>
+
+<div class="quote">[FAIL] IR intensities are on an absolute scale (sum rule closes to &lt;0.5%)
+  - ir/water: the intensity sum rule is off by -9.24% -- the projection onto
+    the normal modes does not conserve sum|dmu/dQ|^2 (got 2.178115, expected
+    2.399868 D^2/amu/A^2), so the km/mol values are not on an absolute scale
+  - ir/h2s: the intensity sum rule is off by -1.292% (got 0.70875, expected
+    0.71803).  How far off a 1/sqrt(m_a) reweighting lands depends on the mass
+    distribution -- water shows -9.2%, H2S only -1.3% -- so one molecule is not
+    enough to detect it</div>
+
+<div class="note">第二条消息我写错过一次：最初写的是“H₂S 会暴露水看不出的问题”，
+而实测恰好相反——水 −9.2%，H₂S 只有 −1.3%。已按实测改正。
+断言里出现一句没验证过的因果，就是下一轮的地雷。</div>
+
+<h2>闸门与结果</h2>
+<ul>
+  <li><code>ir_sum_rule</code> 现在是 <code>analysis.py</code> 里的公开函数，并在每次
+      振动分析中随结果返回（水 0.035%、氨 0.008%）。它本身是有意义的物理量，
+      不只是测试脚手架。</li>
+  <li>contract 新增 3 项：水的求和规则 &lt;0.5%（且断言转动项非零——水的转动项是
+      振动项的 <strong>4 倍</strong>，漏掉它会让一个完全正确的投影显示 50% 误差）、
+      H₂S 的求和规则、<code>ir_intensity_units</code> 必须写明 km/mol。</li>
+  <li>另加一条逐模式回归（水 79.6 / 1.8 / 20.1，±10%）。求和规则抓的是系统性
+      错配，这条抓的是“总量对但模式间串了”——两者互补，都不足以单独成立。</li>
+  <li>界面新增一枚 <em>absolute intensities · sum rule closes to 0.035%</em> 芯片，
+      悬停显示单位约定；叙述里也直接引用这个残差，而不是让读者去信表头。</li>
+</ul>
+
+<div class="quote">  check_selectors  PASS   1 checks
+  check_library    PASS  63 checks
+  agent.designer   PASS  97 checks
+  contract         PASS  35 checks
+  selftest         PASS  10 checks
+  sweep            PASS  76 checks
+  check_series     PASS  16 checks
+  check_fields     PASS  13 checks
+  check_nto        PASS  14 checks
+  check_reaction   PASS  52 checks
+
+  10/10 gates passed</div>
+
+<p>套件耗时 14m08s。<code>contract</code> 的计数是 <code>[PASS]</code> 行数，
+不是断言条数——新增的这一段里含 3 条断言，计数只 +1。</p>
+
+<h2>仍待处理</h2>
+<ul>
+  <li>论文常用但尚未实现的图：NMR 化学位移、拉曼谱、Mayer 键级、Hirshfeld/ESP 电荷。
+      （PySCF 这一构建里 <code>pyscf.prop</code> 整个子包不存在，NMR 需要另找路径。）</li>
+  <li>def2 / cc-pVDZ 没有 CCCBDB 频率校正因子，目前明确标注为未校正。</li>
+  <li><code>vibrations</code> / <code>dos</code> 两个面板的自动切换只有静态检查，
+      没有浏览器闸门（scan 有一个）。</li>
+  <li>仓库清理：<code>data/nci_test</code>（~30 MB）、<code>build/</code> +
+      <code>tools/</code>（~2 GB）、<code>data/designs</code> 里 44 个过期文件。</li>
+</ul>
+
+</main>
+</body>
+</html>

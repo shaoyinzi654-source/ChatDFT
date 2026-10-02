@@ -1,0 +1,333 @@
+{
+ "id": "2aa87a936a",
+ "brief": {
+  "text": "design molecules",
+  "goal": "design molecules",
+  "n_candidates": 4,
+  "generations": 1,
+  "dft_top": 0,
+  "max_atoms": 30,
+  "min_atoms": 3,
+  "max_molwt": null,
+  "min_molwt": null,
+  "max_logp": null,
+  "min_logp": null,
+  "allowed_elements": null,
+  "forbidden_elements": [],
+  "required_smarts": [
+   "[#6]C(=O)[#6]"
+  ],
+  "forbidden_smarts": [],
+  "seeds": [],
+  "functional": "b3lyp",
+  "basis": "6-31g*",
+  "notes": [
+   "No numeric target was given, so candidates are judged on a balanced lipophilicity / polar-surface profile, and the molecules proposed for the stated goal are listed first. Say something like \"logP below 2 and TPSA above 60\" to steer the search by numbers instead."
+  ],
+  "has_numeric": false,
+  "alert_filter": "none",
+  "optimize_leads": false,
+  "targets": [
+   {
+    "key": "logp",
+    "aim": "near",
+    "weight": 1.0,
+    "low": -2.0,
+    "high": 6.0,
+    "value": 2.0,
+    "label": "logP (lipophilicity)"
+   },
+   {
+    "key": "tpsa",
+    "aim": "near",
+    "weight": 1.0,
+    "low": 0.0,
+    "high": 140.0,
+    "value": 60.0,
+    "label": "Topological polar surface area"
+   }
+  ]
+ },
+ "candidates": [
+  {
+   "smiles": "CC(=O)c1ccc2[nH]cnc2c1",
+   "name": "C9H8N2O",
+   "rationale": "",
+   "origin": "assembly",
+   "descriptors": {
+    "formula": "C9H8N2O",
+    "atoms": 12,
+    "heavy_atoms": 12,
+    "values": {
+     "molwt": 160.2,
+     "logp": 1.77,
+     "tpsa": 45.75,
+     "hbd": 1.0,
+     "hba": 2.0,
+     "rotb": 1.0,
+     "rings": 2.0,
+     "arom_rings": 2.0,
+     "fsp3": 0.11,
+     "heavy": 12.0,
+     "mr": 46.1,
+     "sa": 2.14,
+     "qed": 0.646
+    },
+    "alerts": {},
+    "alert_count": 0
+   },
+   "dft": null,
+   "scoring": {
+    "score": 0.8472,
+    "targets": [
+     {
+      "key": "logp",
+      "label": "logP (lipophilicity)",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "near",
+      "weight": 1.0,
+      "value": 1.765,
+      "desirability": 0.9414
+     },
+     {
+      "key": "tpsa",
+      "label": "Topological polar surface area",
+      "unit": "A^2",
+      "source": "rdkit",
+      "aim": "near",
+      "weight": 1.0,
+      "value": 45.75,
+      "desirability": 0.7625
+     }
+    ],
+    "blocking": [],
+    "measured": false
+   },
+   "qualified": true
+  },
+  {
+   "smiles": "CC(=O)c1cocn1",
+   "name": "C5H5NO2",
+   "rationale": "",
+   "origin": "assembly",
+   "descriptors": {
+    "formula": "C5H5NO2",
+    "atoms": 8,
+    "heavy_atoms": 8,
+    "values": {
+     "molwt": 111.1,
+     "logp": 0.88,
+     "tpsa": 43.1,
+     "hbd": 0.0,
+     "hba": 3.0,
+     "rotb": 1.0,
+     "rings": 1.0,
+     "arom_rings": 1.0,
+     "fsp3": 0.2,
+     "heavy": 8.0,
+     "mr": 26.51,
+     "sa": 3.09,
+     "qed": 0.505
+    },
+    "alerts": {},
+    "alert_count": 0
+   },
+   "dft": null,
+   "scoring": {
+    "score": 0.7188,
+    "targets": [
+     {
+      "key": "logp",
+      "label": "logP (lipophilicity)",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "near",
+      "weight": 1.0,
+      "value": 0.877,
+      "desirability": 0.7193
+     },
+     {
+      "key": "tpsa",
+      "label": "Topological polar surface area",
+      "unit": "A^2",
+      "source": "rdkit",
+      "aim": "near",
+      "weight": 1.0,
+      "value": 43.1,
+      "desirability": 0.7183
+     }
+    ],
+    "blocking": [],
+    "measured": false
+   },
+   "qualified": true
+  },
+  {
+   "smiles": "CC(=O)c1cn[nH]c1",
+   "name": "C5H6N2O",
+   "rationale": "",
+   "origin": "assembly",
+   "descriptors": {
+    "formula": "C5H6N2O",
+    "atoms": 8,
+    "heavy_atoms": 8,
+    "values": {
+     "molwt": 110.1,
+     "logp": 0.61,
+     "tpsa": 45.75,
+     "hbd": 1.0,
+     "hba": 2.0,
+     "rotb": 1.0,
+     "rings": 1.0,
+     "arom_rings": 1.0,
+     "fsp3": 0.2,
+     "heavy": 8.0,
+     "mr": 28.59,
+     "sa": 2.63,
+     "qed": 0.538
+    },
+    "alerts": {},
+    "alert_count": 0
+   },
+   "dft": null,
+   "scoring": {
+    "score": 0.7057,
+    "targets": [
+     {
+      "key": "logp",
+      "label": "logP (lipophilicity)",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "near",
+      "weight": 1.0,
+      "value": 0.612,
+      "desirability": 0.6531
+     },
+     {
+      "key": "tpsa",
+      "label": "Topological polar surface area",
+      "unit": "A^2",
+      "source": "rdkit",
+      "aim": "near",
+      "weight": 1.0,
+      "value": 45.75,
+      "desirability": 0.7625
+     }
+    ],
+    "blocking": [],
+    "measured": false
+   },
+   "qualified": true
+  },
+  {
+   "smiles": "CC(=O)c1ncc[nH]1",
+   "name": "C5H6N2O",
+   "rationale": "",
+   "origin": "assembly",
+   "descriptors": {
+    "formula": "C5H6N2O",
+    "atoms": 8,
+    "heavy_atoms": 8,
+    "values": {
+     "molwt": 110.1,
+     "logp": 0.61,
+     "tpsa": 45.75,
+     "hbd": 1.0,
+     "hba": 2.0,
+     "rotb": 1.0,
+     "rings": 1.0,
+     "arom_rings": 1.0,
+     "fsp3": 0.2,
+     "heavy": 8.0,
+     "mr": 28.59,
+     "sa": 2.86,
+     "qed": 0.538
+    },
+    "alerts": {
+     "NIH": [
+      "keto_def_heterocycle"
+     ]
+    },
+    "alert_count": 1
+   },
+   "dft": null,
+   "scoring": {
+    "score": 0.7057,
+    "targets": [
+     {
+      "key": "logp",
+      "label": "logP (lipophilicity)",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "near",
+      "weight": 1.0,
+      "value": 0.612,
+      "desirability": 0.6531
+     },
+     {
+      "key": "tpsa",
+      "label": "Topological polar surface area",
+      "unit": "A^2",
+      "source": "rdkit",
+      "aim": "near",
+      "weight": 1.0,
+      "value": 45.75,
+      "desirability": 0.7625
+     }
+    ],
+    "blocking": [],
+    "measured": false
+   },
+   "qualified": true
+  }
+ ],
+ "rejected": 19,
+ "generated": 68,
+ "dft_ran": 0,
+ "dft_cached": 0,
+ "generations": 1,
+ "origins": {
+  "seed": 1,
+  "mutation": 8,
+  "assembly": 40
+ },
+ "model_used": "stub",
+ "model_notes": [
+  "No numeric target was given, so candidates are judged on a balanced lipophilicity / polar-surface profile, and the molecules proposed for the stated goal are listed first. Say something like \"logP below 2 and TPSA above 60\" to steer the search by numbers instead."
+ ],
+ "seconds": 0.74,
+ "targets": [
+  {
+   "key": "logp",
+   "aim": "near",
+   "weight": 1.0,
+   "low": -2.0,
+   "high": 6.0,
+   "value": 2.0,
+   "label": "logP (lipophilicity)"
+  },
+  {
+   "key": "tpsa",
+   "aim": "near",
+   "weight": 1.0,
+   "low": 0.0,
+   "high": 140.0,
+   "value": 60.0,
+   "label": "Topological polar surface area"
+  }
+ ],
+ "qualified": 49,
+ "requirements": [
+  "[#6]C(=O)[#6]"
+ ],
+ "unmet_requirements": [],
+ "rejection_reasons": {
+  "missing required substructure [##]C(=O)[##]": 19
+ },
+ "quality_checks": {
+  "sa_score": true,
+  "qed": true,
+  "alerts": true
+ }
+}

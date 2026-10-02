@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChatDFT 审计 · 第 10 轮 — 网格上的最小值、以及我自己写错的断言</title>
+<style>
+  :root {
+    --ink: #1b1f24; --muted: #5b6570; --line: #e2e6ea; --bg: #ffffff;
+    --soft: #f6f8fa; --accent: #1f6feb; --warn: #9a5b00; --warnbg: #fdf3e3;
+    --ok: #1a7f37; --okbg: #eaf6ec; --bad: #b42318; --badbg: #fdeceb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.65 -apple-system, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", Roboto, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 28px 80px; }
+  h1 { font-size: 27px; margin: 0 0 6px; letter-spacing: -.2px; }
+  .sub { color: var(--muted); margin: 0 0 34px; font-size: 14px; }
+  h2 { font-size: 19px; margin: 42px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 26px 0 8px; }
+  p { margin: 10px 0; }
+  code { background: var(--soft); padding: 1px 5px; border-radius: 4px;
+    font-family: "SFMono-Regular", Consolas, monospace; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0;
+    font-size: 14px; }
+  th, td { text-align: left; padding: 9px 11px; border: 1px solid var(--line);
+    vertical-align: top; }
+  th { background: var(--soft); font-weight: 600; }
+  td.n { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    white-space: nowrap; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 12px; font-weight: 600; }
+  .t-ok { background: var(--okbg); color: var(--ok); }
+  .t-bad { background: var(--badbg); color: var(--bad); }
+  .t-warn { background: var(--warnbg); color: var(--warn); }
+  .note { background: var(--warnbg); border-left: 3px solid #f0c99a;
+    padding: 10px 14px; margin: 16px 0; font-size: 14px; }
+  .quote { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    background: var(--soft); padding: 10px 12px; border-radius: 6px;
+    overflow-x: auto; margin: 10px 0; color: #333; }
+  ul { padding-left: 22px; } li { margin: 5px 0; }
+  .kpi { display: flex; gap: 14px; flex-wrap: wrap; margin: 18px 0 4px; }
+  .kpi div { flex: 1 1 150px; border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 14px; background: var(--soft); }
+  .kpi b { display: block; font-size: 21px; }
+  .kpi span { font-size: 12.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>第 10 轮审计：网格上的最小值</h1>
+<p class="sub">一个数值缺陷，一条我自己写错的断言，以及两处顺带发现的工程问题。
+全部数字为本轮实测。</p>
+
+<div class="kpi">
+  <div><b>3</b><span>修复的缺陷</span></div>
+  <div><b>2</b><span>变异测试</span></div>
+  <div><b>+12</b><span>新增浏览器检查</span></div>
+  <div><b>10/10</b><span>闸门套件（17m48s）</span></div>
+</div>
+
+<h2>缺陷 · 扫描极小点被网格量化</h2>
+<p>刚性扫描报出的「极小点」只是<strong>恰好最近的那个格点</strong>。以 101 点细扫描
+为参考（水的 O–H 刚性 PES 极小点 <code>0.96683 Å</code>）：</p>
+<table>
+  <tr><th>点数</th><th>步长 (Å)</th><th>网格极小点</th><th>误差</th>
+      <th>抛物线拟合</th><th>误差</th></tr>
+  <tr><td>8</td><td class="n">0.0821</td><td class="n">0.9783</td>
+      <td class="n">+0.0115</td><td class="n">0.9746</td><td class="n">+0.0077</td></tr>
+  <tr><td>12（默认）</td><td class="n">0.0522</td><td class="n">0.9708</td>
+      <td class="n">+0.0040</td><td class="n">0.9700</td><td class="n">+0.0032</td></tr>
+  <tr><td>16</td><td class="n">0.0383</td><td class="n">0.9674</td>
+      <td class="n">+0.0005</td><td class="n">0.9686</td><td class="n">+0.0017</td></tr>
+  <tr><td>25</td><td class="n">0.0239</td><td class="n">0.9578</td>
+      <td><span class="tag t-bad">−0.0091</span></td>
+      <td class="n">0.9672</td><td class="n">+0.0004</td></tr>
+  <tr><td>40</td><td class="n">0.0147</td><td class="n">0.9615</td>
+      <td class="n">−0.0054</td><td class="n">0.9670</td><td class="n">+0.0001</td></tr>
+</table>
+<div class="note">
+<strong>加密网格并不让误差单调下降</strong> —— 25 点（−0.0091）比 16 点（+0.0005）
+更差，因为答案取决于网格恰好落在哪。而叙述原本按三位小数引用成
+“bottoms out at r = 0.971 A”，暗示 ±0.0005 的精度，真实不确定性是 ±0.026 Å。
+</div>
+<p>修复：<code>scan</code> 块新增 <code>grid_step</code> 与
+<code>minimum_fitted</code>（过最低三点的抛物线顶点，零额外 SCF 成本）；
+叙述与界面都改报拟合值并同时给出网格步长；若最低点是端点（窗口根本没框住底部），
+新增告警而不是把端点当极小点。</p>
+
+<h2>我自己写错了断言（本轮最值得记的一条）</h2>
+<p>第一版断言是「拟合误差 &lt; 0.2 × 网格误差」，结果在 25 点上失败：那次网格恰好
+落在底部（误差 0.0001 Å），比拟合（0.0007 Å）还准。<strong>实现没有问题，是断言
+太强</strong>——拟合的优势是最坏意义、不依赖网格，而不是逐次成立。</p>
+<p>正确的性质是<strong>稳定性</strong>：把网格滑动半个格距，</p>
+<table>
+  <tr><th>点数</th><th>网格极小点跳动</th><th>拟合极小点跳动</th></tr>
+  <tr><td>12</td><td><span class="tag t-bad">0.0264 Å</span></td>
+      <td><span class="tag t-ok">0.0003 Å</span></td></tr>
+  <tr><td>25</td><td><span class="tag t-bad">0.0121 Å</span></td>
+      <td><span class="tag t-ok">0.0005 Å</span></td></tr>
+</table>
+<p>断言改为 <code>spread(fit) &lt; 0.1 × spread(grid)</code>。
+这才是「不依赖运气也成立」的性质。教训：断言失败时先别调阈值，先问它断言的是不是
+方法真的保证的东西。</p>
+
+<h2>顺带发现的两处工程问题</h2>
+<h3>闸门运行器崩溃时既不报结论也不报摘要</h3>
+<p>完整套件两次在最后一个闸门前无声死掉（一次在 <code>agent.designer</code> 之后、
+一次在 <code>check_nto</code> 之后），没有 traceback、没有摘要、只留一个
+非零退出码——读起来就像某个闸门失败了，而实际上剩下的闸门根本没跑。
+（单独重跑 <code>check_reaction</code> 确认是 1/1 通过，所以不是代码问题。）</p>
+<p>修复：每个闸门改为在<strong>子进程</strong>中运行。崩溃不再带走整个套件，
+负返回码（Windows 上的访问违规）会被明确标成
+<code>CRASHED (status N)</code>，并加上 30 分钟的超时上限。</p>
+
+<h3>扫描跑完后界面停在 Properties 页</h3>
+<p>自动切页逻辑里没有 scan，所以用户要的图算出来后，被展示的是另一个面板。
+同时 <code>switchTab</code> 的 resize 列表也漏了 scan / vibrations / dos ——
+在隐藏页里画的图宽度为 0，切过去也不会自己变好。两处一起修。</p>
+
+<h2>新增浏览器闸门：browser_scan（12 项）</h2>
+<p>扫描面板是唯一一个「图上是采样点、而读者会当成极小点」的地方，静态选择器检查
+看不见这类问题。新闸门真实驱动浏览器，断言曲线已绘制、表格有行、
+注释同时给出<strong>拟合极小点</strong>与<strong>最低采样点</strong>与
+<strong>网格步长</strong>、并明确它仍是刚性扫描、无控制台报错。</p>
+<p>这条闸门立刻抓到了上面那个「画布宽度为 0 / 面板没切过去」的问题。</p>
+
+<h2>变异测试</h2>
+<table>
+  <tr><th>注入的变异</th><th>闸门输出</th></tr>
+  <tr><td>拟合值退化为网格点</td>
+      <td class="n">sliding the grid by half a step moves the fitted minimum by 0.0264 A and the sampled minimum by 0.0264 A</td></tr>
+  <tr><td>去掉端点告警</td>
+      <td class="n">a scan whose lowest point is its endpoint carries no warning</td></tr>
+</table>
+
+<h2>闸门结果</h2>
+<div class="quote">check_selectors 1 · check_library 63 · agent.designer 97 · contract 33
+selftest 12 · sweep 76 · check_series 16 · check_fields 13 · check_nto 14 · check_reaction 52
+10/10 gates passed   exit=0   17m48s
+browser_design 25 · browser_series 12 · browser_scan 12   3/3 passed</div>
+
+<h2>仍待处理</h2>
+<ul>
+  <li>清理待确认：<code>data/nci_test</code>（约 30 MB）、<code>build/</code> 与
+      <code>tools/</code>（约 2 GB）、<code>data/designs</code> 下 44 个历史文件。</li>
+  <li>vibrations / dos 面板的自动切页改动只经过静态检查，尚无浏览器闸门覆盖
+      （scan 有）。</li>
+  <li>尚未实现的常见论文图：NMR 化学位移、拉曼光谱、Mayer 键级、
+      Hirshfeld/ESP 电荷。</li>
+</ul>
+
+</main>
+</body>
+</html>

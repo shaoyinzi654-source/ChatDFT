@@ -1,0 +1,43 @@
+{
+ "format": 3,
+ "key": "phosphine",
+ "label": "PH3",
+ "formula": "H3P",
+ "geometry": "H-P 1.4200 A x3; H-P-H 93.50 deg (the module's experimental geometry)",
+ "geometry_source": "builtin",
+ "geometry_signature": "5baac1fd591a",
+ "geometry_documented": "P-H 1.420 A, H-P-H 93.5 deg (experimental r_e)",
+ "method": "1ba77afcbe6a3e7b",
+ "basis": "6-31g*",
+ "conv_tol": 1e-13,
+ "field_step_au": 0.0003,
+ "natm": 4,
+ "nao": 24,
+ "atoms_per_element": {
+  "P": 1,
+  "H": 3
+ },
+ "element_shielding_ppm": {
+  "P": {
+   "sigma_iso_ppm": 620.1113727696967,
+   "spread_ppm": 0.0,
+   "n_equivalent": 1,
+   "per_atom_ppm": [
+    620.1113727696967
+   ]
+  },
+  "H": {
+   "sigma_iso_ppm": 30.326235240277104,
+   "spread_ppm": 1.6893059644473851e-06,
+   "n_equivalent": 3,
+   "per_atom_ppm": [
+    30.326236366479733,
+    30.32623467717781,
+    30.32623467717377
+   ]
+  }
+ },
+ "dE_dB_max": 0.0,
+ "tensor_asymmetry_max_ppm": 0.24458806438091882,
+ "cached": false
+}

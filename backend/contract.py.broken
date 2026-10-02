@@ -1,0 +1,2807 @@
+"""Contract audit: every field the front end reads must be in the API payload.
+
+The selector check (`check_selectors.py`) proves the DOM wiring is consistent;
+this one proves the *data* wiring is. Both catch bugs that API-level tests miss,
+because a render function reading an absent field silently produces `undefined`
+in the UI rather than an error.
+
+Runs against a live server.  Usage:  python -m backend.contract
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import sys
+import time
+import urllib.error
+import urllib.request
+
+import numpy as np
+
+BASE = "http://127.0.0.1:8000"
+FAILURES: list[str] = []
+
+
+def _req(method: str, path: str, payload: dict | None = None, timeout: float = 60.0):
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    req = urllib.request.Request(BASE + path, data=data, method=method)
+    if data is not None:
+        req.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8")
+            try:
+                return resp.status, json.loads(body)
+            except json.JSONDecodeError:
+                return resp.status, body
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read().decode("utf-8", "replace")
+
+
+def _wait(job_id: str, timeout: float = 300.0) -> dict:
+    deadline = time.time() + timeout
+    job: dict = {}
+    while time.time() < deadline:
+        _, job = _req("GET", f"/api/job/{job_id}")
+        if isinstance(job, dict) and job.get("status") in ("completed", "failed"):
+            return job
+        time.sleep(1.0)
+    job["status"] = "timeout"
+    return job
+
+
+# ----------------------------------------------------------------------
+#  field specifications, derived from reading frontend/static/js/app.js
+# ----------------------------------------------------------------------
+# every job type goes through handleCompleted() -> renderProperties()
+COMMON = {
+    "energy_hartree": (int, float),
+    "energy_ev": (int, float),
+    "homo_ev": (int, float),
+    "lumo_ev": (int, float),
+    "gap_ev": (int, float),
+    "nelec": int,
+    "nbf": int,
+    "converged": bool,
+    "scf_seconds": (int, float),
+    "functional": str,
+    "basis": str,
+    "charge": int,
+    "multiplicity": int,
+    "warnings": list,
+    "orbital_ladder": list,
+    "mulliken_charges": list,
+    "dipole": dict,
+    "geometry": dict,
+    "molecule": dict,
+}
+
+# renderProperties() reads these nested keys
+DIPOLE_KEYS = ["x", "y", "z", "magnitude"]
+CHARGE_KEYS = ["atom", "symbol", "charge"]
+LADDER_KEYS = ["index", "energy_ha", "energy_ev", "occupation", "label"]
+MOLECULE_KEYS = ["name", "formula", "atoms", "bonds", "natoms", "charge", "multiplicity"]
+
+# geometry_optimization adds these
+OPT_EXTRA = {"optimized_xyz": str, "opt_backend": str,
+             "opt_converged": bool, "opt_grms": (int, float),
+             "opt_gmax": (int, float), "opt_criteria": dict,
+             "n_steps": int}
+# excited_states adds these
+EXC_EXTRA = {"excited_states": list}
+STATE_KEYS = ["state", "energy_ev", "wavelength_nm", "oscillator_strength"]
+SCAN_POINT_KEYS = ["index", "r", "energy_hartree", "energy_rel_kcal", "converged"]
+
+
+def check_present(label: str, obj: dict, keys: list[str]) -> None:
+    """Presence-only check, for keys whose type is not worth asserting."""
+    for key in keys:
+        if key not in obj:
+            fail.append(f"{label}: missing '{key}'")
+
+
+def check_fields(label: str, obj: dict, spec: dict) -> None:
+    for key, typ in spec.items():
+        if key not in obj:
+            fail.append(f"{label}: missing '{key}'")
+            continue
+        val = obj[key]
+        # bool is a subclass of int; do not let it satisfy a numeric check
+        if typ is not bool and isinstance(val, bool):
+            fail.append(f"{label}: '{key}' is a bool, expected {typ}")
+            continue
+        if typ is int and isinstance(val, float):
+            continue  # json turns ints into floats sometimes; harmless
+        if not isinstance(val, typ):
+            fail.append(f"{label}: '{key}' is {type(val).__name__}, expected {typ}")
+
+
+def check_list_of(label: str, rows: list, keys: list[str], expect_rows: bool = True) -> None:
+    if expect_rows and not rows:
+        fail.append(f"{label}: expected at least one row, got none")
+        return
+    for i, row in enumerate(rows):
+        if not isinstance(row, dict):
+            fail.append(f"{label}[{i}]: not an object")
+            continue
+        for k in keys:
+            if k not in row:
+                fail.append(f"{label}[{i}]: missing '{k}'")
+
+
+def run(kind: str, molecule: str, *, extra_spec: dict | None = None,
+        require_rows: dict | None = None, **kw) -> dict | None:
+    body = {"molecule": molecule, "kind": kind, "functional": "b3lyp",
+            "basis": "6-31g*", **kw}
+    code, resp = _req("POST", "/api/job", body)
+    if code != 200 or not isinstance(resp, dict) or not resp.get("job_id"):
+        fail.append(f"{kind}/{molecule}: submit failed HTTP {code} {str(resp)[:80]}")
+        return None
+    job = _wait(resp["job_id"])
+    if job.get("status") != "completed":
+        fail.append(f"{kind}/{molecule}: job {job.get('status')} "
+                        f"{(job.get('error') or '')[:80]}")
+        return None
+
+    result = job.get("result") or {}
+    label = f"{kind}/{molecule}"
+
+    check_fields(f"{label}.result", result, COMMON)
+    if extra_spec:
+        check_fields(f"{label}.result", result, extra_spec)
+
+    check_fields(f"{label}.dipole", result.get("dipole") or {}, {k: (int, float) for k in DIPOLE_KEYS})
+    check_list_of(f"{label}.mulliken_charges", result.get("mulliken_charges") or [], CHARGE_KEYS)
+    check_list_of(f"{label}.orbital_ladder", result.get("orbital_ladder") or [], LADDER_KEYS)
+    check_present(f"{label}.molecule", result.get("molecule") or {}, MOLECULE_KEYS)
+
+    geo = result.get("geometry") or {}
+    if "bonds" not in geo:
+        fail.append(f"{label}.geometry: missing 'bonds'")
+
+    # job-level fields the UI reads
+    for key in ("kind", "status", "explanation"):
+        if not job.get(key):
+            fail.append(f"{label}.job: missing/empty '{key}'")
+
+    # the orbital ladder must mark exactly one HOMO and one LUMO
+    ladder = result.get("orbital_ladder") or []
+    nh = sum(1 for o in ladder if o.get("label") == "HOMO")
+    nl = sum(1 for o in ladder if o.get("label") == "LUMO")
+    if nh != 1 or nl != 1:
+        fail.append(f"{label}: ladder labels HOMO={nh}, LUMO={nl} (want 1 and 1)")
+
+    # The ladder is one spin channel, not both.  An unrestricted calculation
+    # has two sets of orbital energies and the diagram shows the alpha one, so
+    # without this field the figure cannot be reproduced from what it says.
+    if not result.get("ladder_channel"):
+        fail.append(
+            f"{label}: the orbital ladder does not say which spin channel it "
+            f"plots; an unrestricted calculation has two with different "
+            f"energies and the diagram shows one, so the figure cannot be "
+            f"reproduced from what it says")
+
+    # A//B.  B3LYP/6-31G* on a force-field conformer and on a DFT minimum are
+    # different calculations with different gaps and dipoles, and a result
+    # that does not say which one it is cannot be compared with anything.
+    geom = result.get("geometry_source")
+    if not geom:
+        fail.append(
+            f"{label}: the result does not say what geometry the numbers were "
+            f"computed on, so it cannot be written as A//B or reproduced")
+    elif kind == "geometry_optimization" and "optimis" not in str(geom).lower():
+        fail.append(
+            f"{label}: the job optimised the geometry but reports it as "
+            f"{geom!r}; the source has to say the geometry is a DFT minimum "
+            f"at this level, or the result reads as a force-field conformer")
+    elif kind != "geometry_optimization" and "optimis" in str(geom).lower():
+        fail.append(
+            f"{label}: the job never optimised but reports the geometry as "
+            f"{geom!r}; that claims a minimum this calculation did not find")
+
+    # population analysis must actually be produced, and each scheme must sum
+    # to the molecular charge -- a partition that does not is meaningless.
+    # Loewdin charges were empty for *every* job (PySCF's mulliken_pop takes no
+    # 'xctype' argument, and the TypeError was swallowed), so the UI advertised
+    # a scheme it never received.
+    total_q = result.get("charge")
+    for scheme in ("mulliken_charges", "lowdin_charges"):
+        rows = result.get(scheme)
+        if not isinstance(rows, list) or not rows:
+            fail.append(
+                f"{label}.{scheme}: empty -- the population analysis did not run")
+            continue
+        if isinstance(total_q, int):
+            s = sum(float(r.get("charge", 0.0)) for r in rows)
+            if abs(s - total_q) > 1e-3:
+                fail.append(
+                    f"{label}.{scheme}: sums to {s:+.4f}, expected {total_q:+d}")
+
+    if require_rows:
+        for name, keys in require_rows.items():
+            rows = result.get(name) or []
+            check_list_of(f"{label}.{name}", rows, keys)
+
+    nbad = len([f for f in FAILURES if f.startswith(label)])
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] {label}  "
+          f"({len(result)} result fields)", flush=True)
+    return result
+
+
+def uv_scale_sections(fail: list) -> None:
+    """The absolute absorption scale, the shape of the curve, and the window.
+
+    Split out of ``main`` so it can be run on its own: these checks need no
+    server and no SCF, and being able to execute them directly is what makes
+    the mutation tests for them cheap enough to actually run.
+    """
+    # Two defects, both invisible in the old figure because it was normalised
+    # to its own maximum:
+    #
+    #   * the curve carried a |dE/dlambda| Jacobian.  That factor conserves the
+    #     *area* of the plot, which is not what an absorbance spectrum is, and
+    #     it varies by (lambda_max/lambda_min)^2 -- 19.75 across a 180-800 nm
+    #     window.  Two bands with equal f and equal width were therefore drawn
+    #     at 8.9:1.  The first assertion below is exactly that pair.
+    #   * the Gaussians had amplitude f instead of unit area, so the ordinate
+    #     was on no absolute scale at all.  Fixing it makes the area under the
+    #     curve over wavenumber an exact multiple of sum(f), which is what the
+    #     remaining assertions check.
+    from backend.engine import analysis as _analysis
+    # These two are written as literals ON PURPOSE.  Reading them back out of
+    # the module would make the assertions below unfalsifiable: scaling the
+    # constant in analysis.py would scale the "expected" value with it and the
+    # check would still pass.  (That is not hypothetical -- the first version
+    # of this section did exactly that, and a factor-of-ten mutation of
+    # EPS_INTEGRAL_PER_F fired nothing.)
+    #   2.3154e8 = 1/4.319e-9, from e^2/(4 eps0 me c) and
+    #              eps = N_A sigma / (1000 ln 10)
+    #   8065.5439 = HARTREE2CM / HARTREE2EV, 1 eV in cm^-1
+    EPS_PER_F = 2.3154e8
+    EV2CM = 8065.5439
+    if abs(_analysis.EPS_INTEGRAL_PER_F / EPS_PER_F - 1.0) > 1e-9 \
+            or abs(_analysis.EV2CM / EV2CM - 1.0) > 1e-6:
+        fail.append(
+            f"uvscale: the module now carries EPS_INTEGRAL_PER_F = "
+            f"{_analysis.EPS_INTEGRAL_PER_F} and EV2CM = {_analysis.EV2CM}; "
+            f"the derived values are {EPS_PER_F} and {EV2CM}. Changing either "
+            f"rescales every absolute ordinate in the app.")
+    nbad = 0
+    EV2NM_ = 1239.8419843320026
+    FWHM = 0.40
+    sigma_ev = FWHM / 2.3548200450309493
+    sigma_cm = sigma_ev * EV2CM
+    eps_analytic = EPS_PER_F / (sigma_cm * math.sqrt(2 * math.pi))
+
+    pair = [
+        {"state": 1, "energy_ev": EV2NM_ / 250.0, "wavelength_nm": 250.0,
+         "oscillator_strength": 1.0},
+        {"state": 2, "energy_ev": EV2NM_ / 500.0, "wavelength_nm": 500.0,
+         "oscillator_strength": 1.0},
+    ]
+    uv = _analysis.uv_curve(pair, fwhm_ev=FWHM)
+    xs, ys = uv.get("x") or [], uv.get("y") or []
+    if len(xs) != len(ys) or not xs:
+        fail.append("uvscale: the synthetic pair produced no curve")
+        nbad += 1
+    else:
+        def _at(target):
+            i = min(range(len(xs)), key=lambda k: abs(xs[k] - target))
+            return float(ys[i]), float(xs[i])
+        h1, l1 = _at(250.0)
+        h2, l2 = _at(500.0)
+        if abs(l1 - 250.0) > 2.0 or abs(l2 - 500.0) > 2.0:
+            fail.append(
+                f"uvscale: the equal-f pair at 250/500 nm was sampled at "
+                f"{l1:.1f}/{l2:.1f} nm")
+            nbad += 1
+        elif h1 / max(h2, 1e-9) < 0.8 or h1 / max(h2, 1e-9) > 1.25:
+            fail.append(
+                f"uvscale: two bands with equal f and equal width came out at "
+                f"{h1:.2f} vs {h2:.2f} ({h1 / max(h2, 1e-9):.2f}:1) at 250 and "
+                f"500 nm. Equal f must mean equal height; a factor that "
+                f"depends on wavelength is a Jacobian, not a spectrum")
+            nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] equal oscillator strength "
+          f"means equal band height", flush=True)
+
+    nbad = 0
+    eps_max = uv.get("epsilon_max")
+    if eps_max is None:
+        fail.append(
+            "uvscale: the curve has no absolute ordinate. A paper quotes "
+            "eps_max in L mol-1 cm-1, and a curve normalised to its own "
+            "maximum cannot supply it.")
+        nbad += 1
+    elif abs(float(eps_max) / eps_analytic - 1.0) > 0.01:
+        fail.append(
+            f"uvscale: a single band with f = 1 and FWHM {FWHM} eV peaks at "
+            f"eps = {float(eps_max):.1f}, but the eps<->f conversion "
+            f"(2.3154e8 = 1/4.319e-9) requires {eps_analytic:.1f}. A wrong "
+            f"constant here is invisible in a normalised plot.")
+        nbad += 1
+    # the peaks list must carry the same number, and it must be the analytic
+    # band maximum rather than whatever the grid happened to sample
+    pk = (uv.get("peaks") or [{}])[0]
+    if pk.get("epsilon_max_l_mol_cm") is None:
+        fail.append("uvscale: the peak table has no eps_max column")
+        nbad += 1
+    elif abs(float(pk["epsilon_max_l_mol_cm"]) / eps_analytic - 1.0) > 1e-3:
+        fail.append(
+            f"uvscale: peak eps_max {pk['epsilon_max_l_mol_cm']} disagrees "
+            f"with the analytic {eps_analytic:.1f}")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] the absolute eps scale is the "
+          f"derived one", flush=True)
+
+    nbad = 0
+    # The sum rule, on a band with a window wide enough that the band is whole.
+    # `measured` must be the trapezoid of the epsilon array the payload ships
+    # (so a stale or hand-set number cannot pass) and it must equal the
+    # analytic integral of unit-area Gaussians.
+    solo = _analysis.uv_curve(
+        [{"state": 1, "energy_ev": EV2NM_ / 400.0, "wavelength_nm": 400.0,
+          "oscillator_strength": 1.0}], fwhm_ev=FWHM,
+        wmin=200.0, wmax=900.0, n_electrons=10)
+    sr = solo.get("sum_rule") or {}
+    eps_arr = np.asarray(solo.get("epsilon") or [], dtype=float)
+    nu_arr = EV2NM_ / np.asarray(solo.get("x") or [], dtype=float) * EV2CM
+    if eps_arr.size == 0 or eps_arr.size != nu_arr.size:
+        fail.append("uvsumrule: no epsilon array to integrate")
+        nbad += 1
+    else:
+        order = np.argsort(nu_arr)
+        recomputed = float(np.trapezoid(eps_arr[order], nu_arr[order]))
+        # 0.1%, not machine precision: the payload rounds the wavelength grid
+        # to two decimals, so re-integrating it cannot reproduce the internal
+        # value exactly -- but a stale or mis-scaled integral is off by far more
+        if abs(recomputed / max(float(sr.get("measured_l_mol_cm2") or 0), 1e-30)
+               - 1.0) > 1e-3:
+            fail.append(
+                f"uvsumrule: the reported integral "
+                f"{sr.get('measured_l_mol_cm2')} is not the integral of the "
+                f"reported curve ({recomputed})")
+            nbad += 1
+        if abs(float(sr.get("covered_fraction") or 0.0) - 1.0) > 1e-6:
+            fail.append(
+                f"uvsumrule: a whole band in a 200-900 nm window should be "
+                f"fully covered, got {sr.get('covered_fraction')}")
+            nbad += 1
+        if abs(float(sr.get("expected_l_mol_cm2") or 0)
+               / EPS_PER_F - 1.0) > 1e-6:
+            fail.append(
+                f"uvsumrule: for one unit of f the expected integral is "
+                f"{sr.get('expected_l_mol_cm2')}, not "
+                f"{EPS_PER_F}")
+            nbad += 1
+        if abs(float(sr.get("residual_pct", 99.0))) > 0.05:
+            fail.append(
+                f"uvsumrule: integral(eps dnu) is off by "
+                f"{sr.get('residual_pct')}% from 2.3154e8 * sum(f). A missing "
+                f"1/(sigma*sqrt(2pi)), a stray Jacobian or the wrong constant "
+                f"all land here.")
+            nbad += 1
+    if sr.get("sum_f_over_n_electrons") is None:
+        fail.append(
+            "uvsumrule: the payload does not report sum(f)/N_electrons, so a "
+            "reader cannot tell how much of the spectrum these roots cover")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] integral(eps dnu) equals "
+          f"2.3154e8 * sum(f)", flush=True)
+
+    nbad = 0
+    # A fixed window cannot serve a small molecule: ethylene's first six roots
+    # all lie below 146 nm, so a 180-800 nm default draws nothing but Gaussian
+    # tails at 100%.  The window has to come from the states.
+    deep = _analysis.uv_curve(
+        [{"state": i + 1, "energy_ev": EV2NM_ / lam, "wavelength_nm": lam,
+          "oscillator_strength": f_} for i, (lam, f_) in enumerate(
+            [(120.0, 0.50), (140.0, 0.20), (300.0, 0.01)])],
+        n_electrons=16)
+    win = deep.get("window_nm") or []
+    if len(win) != 2:
+        fail.append("uvwindow: the curve does not report its window")
+        nbad += 1
+    else:
+        for lam in (120.0, 140.0, 300.0):
+            if not (win[0] <= lam <= win[1]):
+                fail.append(
+                    f"uvwindow: the auto window {win} excludes the {lam:.0f} nm "
+                    f"band, so the figure cannot show it")
+                nbad += 1
+        if deep.get("window_source") != "auto":
+            fail.append(
+                f"uvwindow: the window came from '{deep.get('window_source')}' "
+                f"rather than from the states")
+            nbad += 1
+        if deep.get("notes"):
+            fail.append(
+                f"uvwindow: an auto window that contains every band should "
+                f"raise no warning, got {deep['notes']}")
+            nbad += 1
+    # and when the caller *does* pin a window that excludes a band, the payload
+    # has to say so rather than quietly drawing a truncated spectrum
+    pinned = _analysis.uv_curve(
+        [{"state": 1, "energy_ev": EV2NM_ / 120.0, "wavelength_nm": 120.0,
+          "oscillator_strength": 0.50}], wmin=180.0, wmax=800.0)
+    if not pinned.get("notes"):
+        fail.append(
+            "uvwindow: a pinned 180-800 nm window excludes the only band "
+            "(120 nm) but the payload raises no warning")
+        nbad += 1
+    elif pinned.get("strongest", {}).get("in_window") is not False:
+        fail.append(
+            "uvwindow: the payload does not flag the strongest transition as "
+            "outside the plotted window")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] the plotted window contains "
+          f"the bands it is meant to show", flush=True)
+
+
+def raman_sections(fail: list) -> None:
+    """The Raman activity convention, the depolarization ceiling, the naming
+    rule that decides when a polarizability is worth reporting at all.
+
+    Split out of ``main`` for the same reason as ``uv_scale_sections``: none of
+    this needs a server or an SCF, so the mutation harness can run the real
+    assertions directly instead of reimplementing them.
+    """
+    from backend.engine import analysis as _a
+    from backend.engine.dft import basis_has_diffuse
+
+    # ---- the activity formula, on tensors whose answer is arithmetic ----
+    # diag(1,2,3): a_bar = 2, gamma^2 = 1/2[(1-2)^2+(2-3)^2+(3-1)^2] = 3,
+    # so activity = 45*4 + 7*3 = 201 and rho = 9/(180+12) = 0.046875.
+    # Written as literals on purpose: deriving them from raman_activity would
+    # make the check unfalsifiable.
+    nbad = 0
+    iso, g2, act = _a.raman_activity(np.diag([1.0, 2.0, 3.0]))
+    if abs(iso - 2.0) > 1e-12 or abs(g2 - 3.0) > 1e-12 or abs(act - 201.0) > 1e-9:
+        fail.append(
+            f"ramanact: diag(1,2,3) must give a_bar=2, gamma^2=3, "
+            f"activity=201; got {iso}, {g2}, {act}")
+        nbad += 1
+    if abs(_a.depolarization_ratio(iso, g2) - 0.046875) > 1e-12:
+        fail.append(
+            f"ramanact: rho for diag(1,2,3) must be 9/192 = 0.046875; got "
+            f"{_a.depolarization_ratio(iso, g2)}")
+        nbad += 1
+
+    # A purely off-diagonal derivative: a_bar = 0, gamma^2 = 3.  This is the
+    # case that pins the ceiling -- rho = 3*3/(0 + 4*3) = 0.75 exactly, and the
+    # activity is 7*3 = 21, not 45*something.
+    off = np.array([[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+    iso2, g22, act2 = _a.raman_activity(off)
+    if abs(iso2) > 1e-12 or abs(g22 - 3.0) > 1e-12 or abs(act2 - 21.0) > 1e-9:
+        fail.append(
+            f"ramanact: the purely off-diagonal tensor must give a_bar=0, "
+            f"gamma^2=3, activity=21; got {iso2}, {g22}, {act2}")
+        nbad += 1
+    if abs(_a.depolarization_ratio(iso2, g22) - 0.75) > 1e-12:
+        fail.append(
+            f"ramanact: a mode with no isotropic derivative must sit exactly "
+            f"at rho = 0.75; got {_a.depolarization_ratio(iso2, g22)}")
+        nbad += 1
+
+    # ---- the invariants have to be rotationally invariant ---------------
+    # a_bar and gamma^2 are invariants of a rank-2 tensor, so rotating the
+    # tensor must not move them.  A formula with a transposed index, a missing
+    # factor of 6, or the wrong off-diagonal pair (xy, xz, yz instead of
+    # xy, yz, zx) is not invariant under rotation and this catches it -- the
+    # single-tensor checks above would not, because a diagonal tensor has no
+    # off-diagonal terms to get wrong.
+    rng = np.random.default_rng(20260914)
+    worst = 0.0
+    worst_rho = 0.0
+    for _ in range(200):
+        m = rng.normal(size=(3, 3))
+        q, _r = np.linalg.qr(m)
+        if np.linalg.det(q) < 0:
+            q[:, 0] *= -1.0
+        t = rng.normal(size=(3, 3))
+        t = 0.5 * (t + t.T)
+        i0, g0, a0 = _a.raman_activity(t)
+        i1, g1, a1 = _a.raman_activity(q @ t @ q.T)
+        scale = max(abs(a0), 1e-12)
+        worst = max(worst, abs(i1 - i0) / max(abs(i0), 1e-9),
+                    abs(g1 - g0) / max(abs(g0), 1e-9), abs(a1 - a0) / scale)
+        worst_rho = max(worst_rho, _a.depolarization_ratio(i1, g1))
+    if worst > 1e-9:
+        fail.append(
+            f"ramaninv: rotating the tensor moved the Placzek invariants by "
+            f"{worst:.3e} relative, but a_bar and gamma^2 are invariants")
+        nbad += 1
+    # Over 200 random tensors, one of which is essentially pure off-diagonal,
+    # the ceiling must not be crossed by any of them.
+    if worst_rho > 0.7500001:
+        fail.append(
+            f"ramaninv: rho reached {worst_rho} over random tensors, above "
+            f"the 3/4 ceiling that the formula guarantees")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] the Raman activity and the "
+          f"depolarization ceiling follow from the tensor", flush=True)
+
+    # ---- the Frobenius identity, on random symmetric tensors ------------
+    # sum_ij a_ij^2 = 3 a_bar^2 + (2/3) gamma^2 is what lets the sum rule (a
+    # Frobenius statement) say anything about the activities.  Checked on
+    # random tensors rather than on the one used above, because for a diagonal
+    # tensor the off-diagonal half of gamma^2 never enters.
+    nbad = 0
+    worst = 0.0
+    for _ in range(200):
+        t = rng.normal(size=(3, 3))
+        t = 0.5 * (t + t.T)
+        i0, g0, _a0 = _a.raman_activity(t)
+        frob = float(np.sum(t * t))
+        worst = max(worst, abs(frob - (3.0 * i0 ** 2 + (2.0 / 3.0) * g0))
+                    / max(frob, 1e-12))
+    if worst > 1e-9:
+        fail.append(
+            f"ramanfrob: ||a||_F^2 and 3 a_bar^2 + (2/3) gamma^2 differ by "
+            f"{worst:.3e} relative; they are the same number written two ways, "
+            f"and the sum rule relies on that")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] the Frobenius norm and the "
+          f"Placzek invariants agree", flush=True)
+
+    # ---- the naming rule that decides whether alpha is worth reporting ---
+    # The basis matters by a factor of two for the polarizability, so which
+    # bases carry a warning is not cosmetic.  These are literals from the
+    # published naming convention: aug- prefixes and + signs mean diffuse,
+    # and nothing in the app's basis list is diffuse without saying so.
+    nbad = 0
+    expect = {
+        "6-31g*": False, "6-31g": False, "def2-svp": False, "cc-pvdz": False,
+        "def2-tzvp": False, "6-311g*": False,
+        "6-31+g*": True, "6-31++g**": True, "aug-cc-pvdz": True,
+        "aug-cc-pvtz": True,
+    }
+    wrong = {b: basis_has_diffuse(b) for b, want in expect.items()
+             if basis_has_diffuse(b) != want}
+    if wrong:
+        fail.append(
+            f"ramandiffuse: the diffuse-basis rule mislabels {wrong}; a "
+            f"polarizability from a basis without diffuse functions is wrong "
+            f"by tens of per cent and has to be flagged")
+        nbad += 1
+    # And the flag has to actually appear on a result computed without them,
+    # or the warning is decoration.  This is the wiring, not the rule.
+    from backend.engine.dft import BASIS_SETS
+
+    for b in ("6-31+g*", "6-31++g**", "aug-cc-pvdz", "aug-cc-pvtz"):
+        if b not in BASIS_SETS:
+            fail.append(
+                f"ramandiffuse: {b} is not offered by the app, so a Raman "
+                f"figure cannot be computed at a basis that supports it")
+            nbad += 1
+    for b in ("6-31+g*", "6-31++g**", "aug-cc-pvdz", "aug-cc-pvtz"):
+        if BASIS_SETS.get(b, {}).get("diffuse") is not True:
+            fail.append(
+                f"ramandiffuse: {b} is in the basis list but not marked "
+                f"diffuse, so the UI cannot group it or hint at it")
+            nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] the diffuse-basis rule and the "
+          f"basis list agree", flush=True)
+
+
+def raman_payload_sections(vres: dict, fail: list) -> int:
+    """Assertions on the Raman fields of a finished vibrations payload.
+
+    Extracted from ``main`` so the mutation harness can run the real
+    assertions against a payload built directly by
+    ``analysis.vibrations`` -- without a server, and without paying for
+    the API round trip on every mutation.  Returns the failure count.
+    """
+    nbad = 0
+    freq = vres.get("frequencies_cm1") or []
+
+    # ---- Raman, from the same job --------------------------------
+    # The two spectra share the Hessian and the displaced geometries, so
+    # this costs nothing extra here -- and the point of asserting them
+    # together is that the interesting fact about water is the *contrast*:
+    # the symmetric stretch is the weakest IR band and the strongest Raman
+    # line.  An implementation that reused the IR intensities for the Raman
+    # activities, or that mis-projected the tensor onto the modes, gets that
+    # exactly backwards, and no shape check on either curve alone would
+    # notice.
+    intens = vres.get("ir_intensities_km_mol") or []
+    ram = vres.get("raman") or {}
+    if ram.get("available") is False:
+        fail.append(
+            f"raman/water: not computed -- {ram.get('reason')}")
+        nbad += 1
+    elif not ram.get("activities_a4_amu"):
+        fail.append(
+            "raman/water: the vibrational analysis returned no Raman "
+            "activities, so there is no Raman figure")
+        nbad += 1
+    else:
+        act = [float(v) for v in ram["activities_a4_amu"]]
+        rho = [float(v) for v in (ram.get("depolarization") or [])]
+        if len(act) != len(freq) or len(rho) != len(freq):
+            fail.append(
+                f"raman/water: {len(act)} activities and {len(rho)} "
+                f"depolarization ratios for {len(freq)} modes")
+            nbad += 1
+        # The ceiling is a theorem, so any violation is a bug, not a
+        # numerical wobble.
+        if rho and max(rho) > 0.7501:
+            fail.append(
+                f"raman/water: rho reached {max(rho)}, above the 3/4 "
+                f"ceiling that the formula guarantees")
+            nbad += 1
+        if act and intens and len(act) == len(intens):
+            strong_raman = max(range(len(act)), key=lambda i: act[i])
+            weak_ir = min(range(len(intens)), key=lambda i: intens[i])
+            if strong_raman != weak_ir:
+                fail.append(
+                    f"raman/water: the strongest Raman mode is {strong_raman} "
+                    f"but the weakest IR mode is {weak_ir}; for water both "
+                    f"are the symmetric O-H stretch, and an implementation "
+                    f"that reuses the IR intensities or mis-projects the "
+                    f"tensor gets this backwards")
+                nbad += 1
+            # And it has to be the *symmetric* stretch, not merely the same
+            # index: the mode is identified by frequency, so a spectrum
+            # whose bands were all shifted or mislabelled cannot satisfy
+            # this by having both columns agree on the wrong mode.
+            if freq[strong_raman] < 3400.0:
+                fail.append(
+                    f"raman/water: the strongest Raman line is at "
+                    f"{freq[strong_raman]} cm-1, which is not an O-H "
+                    f"stretch")
+                nbad += 1
+            # A B2 mode in C2v has no isotropic polarizability derivative,
+            # so its rho is exactly 3/4.  This is symmetry, not a fit: it
+            # tests the projection and the tensor at once.
+            degen = [i for i in range(len(rho))
+                     if abs(rho[i] - 0.75) < 5e-3]
+            if not degen:
+                fail.append(
+                    f"raman/water: no mode sits at rho = 0.750; the "
+                    f"asymmetric O-H stretch is B2 and its isotropic "
+                    f"derivative vanishes by symmetry. Got {rho}")
+                nbad += 1
+        sr2 = ram.get("sum_rule") or {}
+        resid2 = sr2.get("residual_pct")
+        if resid2 is None:
+            fail.append(
+                "raman/water: no Raman sum rule, so the activities are not "
+                "shown to be on an absolute scale")
+            nbad += 1
+        elif abs(float(resid2)) > 0.5:
+            fail.append(
+                f"raman/water: the Raman sum rule is off by {resid2}%, so "
+                f"the activities are not on an absolute scale")
+            nbad += 1
+        if sr2.get("translational_frob2_per_amu") not in (0, 0.0):
+            fail.append(
+                f"raman/water: the translational term of the Raman sum "
+                f"rule is "
+                f"{sr2.get('translational_frob2_per_amu')}, but alpha is "
+                f"invariant under translation so it is exactly zero")
+            nbad += 1
+        fvi = ram.get("frobenius_vs_invariants_pct")
+        if fvi is None or abs(float(fvi)) > 0.01:
+            fail.append(
+                f"raman/water: the Frobenius norm and 3 a_bar^2 + "
+                f"(2/3) gamma^2 differ by {fvi}%, but they are the same "
+                f"number written two ways")
+            nbad += 1
+        # 6-31G* has no diffuse functions, so the polarizability is
+        # expected to be badly low -- and the result has to SAY so rather
+        # than letting a normalised curve hide it.
+        if ram.get("alpha_reliable") is not False:
+            fail.append(
+                f"raman/water: alpha_reliable is "
+                f"{ram.get('alpha_reliable')!r} at 6-31G*, which has no "
+                f"diffuse functions")
+            nbad += 1
+        if not ram.get("basis_warning"):
+            fail.append(
+                "raman/water: no basis warning at 6-31G*, though the "
+                "polarizability there is ~48% below the measured value")
+            nbad += 1
+        sp = vres.get("raman_spectrum") or {}
+        if len(sp.get("x") or []) < 100 or not sp.get("peaks"):
+            fail.append(
+                f"raman/water: Raman curve has {len(sp.get('x') or [])} "
+                f"points and {len(sp.get('peaks') or [])} peaks")
+            nbad += 1
+        elif sp["x"][0] < sp["x"][-1]:
+            fail.append(
+                "raman/water: the Raman axis runs low-to-high; the "
+                "convention is high wavenumber on the left")
+            nbad += 1
+        else:
+            # The peak table has to carry rho alongside the activity, or
+            # the figure cannot be captioned with the number that says
+            # whether each band is polarised.
+            for k in ("activity_a4_amu", "depolarization", "scaled_cm1"):
+                if not all(k in (p or {}) for p in sp["peaks"]):
+                    fail.append(
+                        f"raman/water: the peak table has no '{k}' column")
+                    nbad += 1
+                    break
+    return nbad
+
+
+def main() -> int:
+    global BASE
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--port", type=int, default=8000)
+    args = ap.parse_args()
+    BASE = f"http://127.0.0.1:{args.port}"
+
+    print(f"=== ChatDFT result-contract audit -> {BASE} ===\n")
+
+    # closed shell
+    run("single_point", "water")
+    # open shell (different code path in _harvest)
+    run("single_point", "methyl_radical")
+    # charged
+    run("single_point", "hydroxide")
+    # triplet
+    o2 = run("single_point", "oxygen", multiplicity=3)
+    # larger molecule
+    run("single_point", "naphthalene")
+
+    # ------------------------------------------------------------------
+    #  spin contamination
+    # ------------------------------------------------------------------
+    # A single unrestricted determinant is not an eigenfunction of S^2, and
+    # the SCF can also land on the wrong state.  <S^2> is the number a paper
+    # quotes to show an open-shell calculation *is* the spin state it claims,
+    # and it used to appear nowhere in the payload: a clean triplet and a
+    # broken-symmetry mess produced the same result.
+    nbad = 0
+    sp = (o2 or {}).get("spin") or {}
+    for k in ("s_squared", "s_squared_expected", "contamination",
+              "contamination_pct", "multiplicity"):
+        if not isinstance(sp.get(k), (int, float)):
+            fail.append(f"spin/O2: {k} is {sp.get(k)!r}, expected a number")
+            nbad += 1
+    if isinstance(sp.get("s_squared"), (int, float)):
+        # O2 is a textbook triplet: <S^2> = S(S+1) = 2 minus a small
+        # contamination.  A wrong spin state, or a closed-shell determinant
+        # mislabelled as a triplet, does not land anywhere near 2.
+        if abs(sp["s_squared"] - 2.0) > 0.25:
+            fail.append(
+                f"spin/O2: <S^2> = {sp['s_squared']}, expected ~2.0 for a "
+                f"triplet (S(S+1) with S = 1)")
+            nbad += 1
+        if sp.get("contamination_pct") is not None \
+                and sp["contamination_pct"] < 0.0:
+            fail.append(
+                f"spin/O2: contamination is {sp['contamination_pct']}%; a "
+                f"single determinant can only push <S^2> above the exact "
+                f"value, never below it")
+            nbad += 1
+    if (o2 or {}).get("spin") is None:
+        fail.append("spin/O2: no spin block for an open-shell calculation")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] an open-shell result reports "
+          f"<S^2> so its spin state can be checked", flush=True)
+
+    # The direction that gives the block above its meaning: a wavefunction
+    # that is *not* the spin state it claims has to be called out.  A triplet
+    # CH4 stretched to r(C-H) = 2.08 A is contaminated by 30% (<S^2> = 2.60
+    # against 2.0) because the alpha and beta orbitals localise differently
+    # once the bonds are pulled apart -- the mechanism behind every
+    # unrestricted-determinant failure, and cheap enough to reproduce here.
+    nbad = 0
+    try:
+        from backend.engine.dft import DFTEngine
+
+        stretched = ("5\nCH4\nC 0 0 0\nH 1.200 1.200 1.200\n"
+                     "H -1.200 -1.200 1.200\nH -1.200 1.200 -1.200\n"
+                     "H 1.200 -1.200 -1.200\n")
+        bad = DFTEngine(atom_xyz=stretched, charge=0, multiplicity=3,
+                        functional="b3lyp", basis="6-31g*").run_scf()
+        bsp = bad.get("spin") or {}
+        if not isinstance(bsp.get("contamination_pct"), (int, float)) \
+                or bsp["contamination_pct"] < 10.0:
+            fail.append(
+                f"spin/contaminated: the stretched triplet reports "
+                f"{bsp.get('contamination_pct')}% contamination, expected "
+                f"well past 10% (this case measures 30%); the check has no "
+                f"contaminated case to check")
+            nbad += 1
+        if not any("spin state" in str(w).lower()
+                   for w in (bad.get("warnings") or [])):
+            fail.append(
+                "spin/contaminated: a 30%-contaminated wavefunction carries "
+                "no warning, so its energies and spin density will be read as "
+                "those of a pure triplet")
+            nbad += 1
+    except Exception as exc:                             # noqa: BLE001
+        fail.append(f"spin/contaminated: the check could not run: {exc}")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] a wavefunction that is not the "
+          f"spin state it claims says so", flush=True)
+
+    # ------------------------------------------------------------------
+    #  solvation: labelled, and actually applied
+    # ------------------------------------------------------------------
+    # A solvated number and a gas-phase number are different quantities with
+    # the same name -- water's dipole goes from 2.07 D to 2.27 D and its
+    # energy drops 4.6 kcal/mol at eps = 78.4 -- and nothing in the result
+    # said which one it was holding.
+    nbad = 0
+    gas = run("single_point", "water")
+    code, resp = _req("POST", "/api/job", {"molecule": "water",
+                                           "kind": "single_point",
+                                           "functional": "b3lyp",
+                                           "basis": "6-31g*",
+                                           "solvation": "78.4"})
+    wet = None
+    if code == 200 and isinstance(resp, dict) and resp.get("job_id"):
+        wet = (_wait(resp["job_id"]).get("result") or {})
+    else:
+        fail.append(f"solvation: job did not run (HTTP {code})")
+        nbad += 1
+    if wet:
+        if not wet.get("solvation"):
+            fail.append(
+                "solvation/water: a solvated calculation reports no solvent "
+                "in its result, so the number cannot be reproduced")
+            nbad += 1
+        if not wet.get("solvation_model"):
+            fail.append(
+                "solvation/water: the result gives a dielectric but not the "
+                "continuum model; 'eps = 78.4' alone is not a method")
+            nbad += 1
+        if gas:
+            # the direction that proves the model was really switched on
+            d_gas = ((gas.get("dipole") or {}).get("magnitude") or 0.0)
+            d_wet = ((wet.get("dipole") or {}).get("magnitude") or 0.0)
+            if not d_gas or not d_wet or d_wet <= d_gas * 1.02:
+                fail.append(
+                    f"solvation/water: the dipole is {d_wet:.4f} D solvated "
+                    f"against {d_gas:.4f} D in the gas phase; a polarisable "
+                    f"continuum must enhance it (measured +9.5%), so the "
+                    f"solvent was labelled but not applied")
+                nbad += 1
+            de = abs(float(wet.get("energy_hartree") or 0.0)
+                     - float(gas.get("energy_hartree") or 0.0))
+            if de < 1e-4:
+                fail.append(
+                    f"solvation/water: the solvated and gas-phase energies "
+                    f"differ by {de:.2e} Ha; the continuum contributes "
+                    f"several kcal/mol and is not switched on")
+                nbad += 1
+            # and the gas-phase side must not claim a solvent it never had
+            if gas.get("solvation") or gas.get("solvation_model"):
+                fail.append(
+                    f"solvation/water: the gas-phase run reports solvation="
+                    f"{gas.get('solvation')!r}, model="
+                    f"{gas.get('solvation_model')!r}; it had none")
+                nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] a solvated result names its "
+          f"continuum model, and a gas-phase one claims no solvent", flush=True)
+
+    # geometry optimisation: must supply optimized_xyz
+    opt_job = run("geometry_optimization", "water", extra_spec=OPT_EXTRA,
+                  max_steps=20)
+    # "Converged" has to mean the gradient criterion was met, not merely that
+    # the optimiser ran.  PySCF's optimize() returns kernel(...)[1] and throws
+    # its own convergence flag away, so for a long time the app logged
+    # "converged" unconditionally and passed an unrelaxed structure downstream
+    # into frequencies, surfaces and barriers.  The flag, the numbers and the
+    # criteria all have to be present and agree.
+    nbad = 0
+    if not isinstance(opt_job, dict):
+        fail.append("opt: the geometry optimisation returned nothing")
+        nbad += 1
+    else:
+        crit = opt_job.get("opt_criteria") or {}
+        conv = opt_job.get("opt_converged")
+        grms, gmax = opt_job.get("opt_grms"), opt_job.get("opt_gmax")
+        if conv is not True:
+            fail.append(
+                f"opt/water: a 20-step optimisation of water reports "
+                f"converged={conv}; it is three atoms from its minimum")
+            nbad += 1
+        for k in ("convergence_grms", "convergence_gmax"):
+            if not isinstance(crit.get(k), (int, float)):
+                fail.append(f"opt/water: no {k} in the reported criteria")
+                nbad += 1
+        if grms is not None and isinstance(crit.get("convergence_grms"), float) \
+                and grms > crit["convergence_grms"] and conv:
+            fail.append(
+                f"opt/water: |g|rms {grms:.2e} is above the criterion "
+                f"{crit['convergence_grms']:.0e} yet the job claims to have "
+                f"converged")
+            nbad += 1
+        if gmax is not None and grms is not None and gmax < grms:
+            fail.append(
+                f"opt/water: |g|max {gmax:.2e} is below |g|rms {grms:.2e}, "
+                f"which is impossible")
+            nbad += 1
+        if not opt_job.get("n_steps"):
+            fail.append(
+                "opt/water: the optimisation reports no step count; a figure "
+                "built on a relaxation has to say how many steps it took")
+            nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] an optimisation reports whether "
+          f"it actually reached the gradient criterion", flush=True)
+
+    # The opposite direction, which is the only thing that makes the check
+    # above mean anything: a relaxation that was not allowed to finish has to
+    # say so.  Pass on this and a flag that is simply always True would
+    # satisfy every assertion in the block above.
+    nbad = 0
+    try:
+        from backend.engine.dft import DFTEngine
+
+        starved_xyz = "3\nwater\nO 0 0 0\nH 1.26 0 0.48\nH -1.26 0 0.48\n"
+        eng = DFTEngine(atom_xyz=starved_xyz, charge=0, multiplicity=1,
+                        functional="b3lyp", basis="6-31g*")
+        starved = eng.optimize(max_steps=2)
+        if starved.get("opt_converged") is not False:
+            fail.append(
+                f"opt/starved: a relaxation stopped after 2 steps, far from "
+                f"the minimum (|g|rms {starved.get('opt_grms')}), reports "
+                f"converged={starved.get('opt_converged')} -- the flag is not "
+                f"reading the gradient")
+            nbad += 1
+        if not (starved.get("warnings") or []):
+            fail.append(
+                "opt/starved: an unconverged optimisation carries no warning, "
+                "so the structure will be used as if it were a minimum")
+            nbad += 1
+        # and it must still be a number, not a blank
+        if not isinstance(starved.get("opt_grms"), (int, float)):
+            fail.append("opt/starved: no residual gradient reported")
+            nbad += 1
+    except Exception as exc:                             # noqa: BLE001
+        fail.append(f"opt/starved: the check could not run: {exc}")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] a relaxation that was cut short "
+          f"says so instead of calling itself converged", flush=True)
+
+    # TD-DFT: must supply excited_states with the spectrum fields
+    run("excited_states", "formaldehyde", extra_spec=EXC_EXTRA, nstates=5,
+        require_rows={"excited_states": STATE_KEYS})
+
+    # bond scan: the curve must exist and be internally consistent.  This job
+    # type was advertised for a long time with no implementation behind it, so
+    # the gate has to assert more than "a result came back".
+    code, resp = _req("POST", "/api/job", {"molecule": "water", "kind": "scan",
+                                           "functional": "b3lyp", "basis": "6-31g*"})
+    nbad = 0
+    if code == 200 and isinstance(resp, dict) and resp.get("job_id"):
+        job = _wait(resp["job_id"])
+        sc = (job.get("result") or {}).get("scan")
+        if not isinstance(sc, dict):
+            fail.append("scan: missing 'scan' block")
+            nbad += 1
+        else:
+            pts = sc.get("points") or []
+            if not pts:
+                fail.append("scan: no points in the curve")
+                nbad += 1
+            else:
+                check_list_of("scan.points", pts, SCAN_POINT_KEYS)
+                kmin = sc.get("minimum_index")
+                if not isinstance(kmin, int) or not (0 <= kmin < len(pts)):
+                    fail.append(f"scan: minimum_index {kmin} is out of range")
+                    nbad += 1
+                else:
+                    if pts[kmin]["energy_hartree"] != min(
+                            p["energy_hartree"] for p in pts):
+                        fail.append("scan: minimum_index is not the lowest point")
+                        nbad += 1
+                    if abs(sc.get("minimum", {}).get("r", -1.0)
+                           - pts[kmin]["r"]) > 1e-3:
+                        fail.append(
+                            "scan: minimum.r disagrees with points[minimum_index].r")
+                        nbad += 1
+            # A scan is rigid: every other nucleus is frozen while this bond
+            # is stretched.  Saying so is what keeps the minimum from being
+            # quoted as an equilibrium bond length.
+            if sc.get("rigid") is not True:
+                fail.append(
+                    f"scan: 'rigid' is {sc.get('rigid')!r}; the curve is only "
+                    f"interpretable if the payload says the rest of the "
+                    f"molecule was frozen")
+                nbad += 1
+        sres = job.get("result") or {}
+        if not isinstance(sres.get("scan_seconds"), (int, float)):
+            fail.append(
+                f"scan: scan_seconds is {sres.get('scan_seconds')!r}; a "
+                f"reported duration has to be measured, and it was "
+                f"hardcoded to None")
+            nbad += 1
+    else:
+        fail.append(f"scan: submit HTTP {code}")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] scan/water curve", flush=True)
+
+    # ------------------------------------------------------------------
+    #  where the well actually bottoms out
+    # ------------------------------------------------------------------
+    # The minimum of a grid is a grid point, so its error is set by where the
+    # grid happens to sit: refining the grid does not steadily improve it
+    # (against a fine reference on water's O-H well it is off by +0.0115 A at
+    # 8 points, +0.0040 at 12, +0.0005 at 16, -0.0091 at 25, -0.0054 at 40 --
+    # worse at 25 than at 16).  Quoting it to three decimals, as the narration
+    # used to, claims a precision the scan cannot support.
+    #
+    # The assertion is therefore *not* "the fit beats the grid here": when the
+    # grid lands on the bottom it can win, and an earlier version of this
+    # check failed for exactly that reason.  The claim is about stability --
+    # slide the grid by half a step and the sampled minimum jumps (measured
+    # 0.0264 A at 12 points, 0.0121 at 25) while the parabola vertex does not
+    # (0.0003 and 0.0005 A).  That is what makes the fitted value quotable.
+    nbad = 0
+    try:
+        from backend.engine.dft import scan_bond
+        from backend.engine import molecule as molmod
+
+        xyz = molmod.from_name("water").to_xyz()
+
+        def _scan(steps, lo=0.85, hi=1.45):
+            return scan_bond(xyz, 0, 1, functional="b3lyp", basis="6-31g*",
+                             steps=steps, lo_scale=lo, hi_scale=hi)["scan"]
+
+        fine = _scan(51, 0.95, 1.05)
+        r_ref = ((fine.get("minimum_fitted") or {}).get("r")
+                 or fine["minimum"]["r"])
+        for steps in (12, 25):
+            gs, fs = [], []
+            for shift in (0.0, 0.5):
+                d = (1.45 - 0.85) / (steps - 1) * shift
+                sc = _scan(steps, 0.85 + d, 1.45 + d)
+                grid_r = sc["minimum"]["r"]
+                fit = sc.get("minimum_fitted") or {}
+                if not isinstance(fit.get("r"), (int, float)):
+                    fail.append(
+                        f"scan/fit({steps}): no fitted minimum in the payload, "
+                        f"so the curve offers a grid point as the bottom of "
+                        f"the well")
+                    nbad += 1
+                    continue
+                if fit.get("energy_hartree") is not None \
+                        and fit["energy_hartree"] \
+                        > sc["minimum"]["energy_hartree"]:
+                    fail.append(
+                        f"scan/fit({steps}): the fitted minimum sits above the "
+                        f"lowest sampled point, which no parabola through "
+                        f"three of them can do")
+                    nbad += 1
+                if abs(fit["r"] - grid_r) > (sc.get("grid_step") or 0.0) + 1e-9:
+                    fail.append(
+                        f"scan/fit({steps}): the vertex ({fit['r']} A) is "
+                        f"further from the lowest sampled point ({grid_r} A) "
+                        f"than one grid step")
+                    nbad += 1
+                if abs(fit["r"] - r_ref) > 0.01:
+                    fail.append(
+                        f"scan/fit({steps}): the fitted minimum is "
+                        f"{fit['r']} A against a reference of {r_ref} A, off "
+                        f"by {abs(fit['r'] - r_ref):.4f} A (tolerance 0.01)")
+                    nbad += 1
+                gs.append(grid_r)
+                fs.append(fit["r"])
+            if len(gs) == 2:
+                spread_g = abs(gs[1] - gs[0])
+                spread_f = abs(fs[1] - fs[0])
+                if spread_f > 0.1 * spread_g + 1e-6:
+                    fail.append(
+                        f"scan/fit({steps}): sliding the grid by half a step "
+                        f"moves the fitted minimum by {spread_f:.4f} A and the "
+                        f"sampled minimum by {spread_g:.4f} A -- the fit is "
+                        f"supposed to be the estimate that does not depend on "
+                        f"where the grid sits")
+                    nbad += 1
+        # The other way to get a meaningless minimum: scan a window that never
+        # brackets the bottom at all.  Every point compressed means the lowest
+        # one is the last one, and reporting its r as a minimum is wrong
+        # however precisely it is quoted.
+        narrow = scan_bond(xyz, 0, 1, functional="b3lyp", basis="6-31g*",
+                           steps=9, lo_scale=0.85, hi_scale=0.95)
+        npts = len(narrow["scan"]["points"])
+        if narrow["scan"]["minimum_index"] != npts - 1:
+            fail.append(
+                f"scan/edge: the compressed window's lowest point is index "
+                f"{narrow['scan']['minimum_index']}, expected {npts - 1} -- "
+                f"the check has no unbracketed case to check")
+            nbad += 1
+        if not any("no minimum was actually bracketed" in str(w)
+                   for w in (narrow.get("warnings") or [])):
+            fail.append(
+                "scan/edge: a scan whose lowest point is its endpoint carries "
+                "no warning, so an endpoint will be read as a minimum")
+            nbad += 1
+    except Exception as exc:                             # noqa: BLE001
+        fail.append(f"scan/fit: the check could not run: {exc}")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] a scan reports where the well "
+          f"bottoms out, not just its lowest grid point", flush=True)
+
+    # comparison job: result is {a: ..., b: ...}
+    code, resp = _req("POST", "/api/chat", {"message": "Compare water and ammonia"})
+    if code == 200 and isinstance(resp, dict) and resp.get("job_id"):
+        job = _wait(resp["job_id"])
+        if job.get("status") == "completed":
+            res = job.get("result") or {}
+            for side in ("a", "b"):
+                if side not in res:
+                    fail.append(f"compare: missing side '{side}'")
+                else:
+                    check_fields(f"compare.{side}", res[side], COMMON)
+            if not job.get("explanation"):
+                fail.append("compare.job: missing 'explanation'")
+            # the comparison must actually be narrated: the analysis used to be
+            # a one-line "Comparison complete" placeholder while the real
+            # explain_compare() sat unreachable in the planner.
+            text = job.get("explanation") or ""
+            for phrase, why in (
+                ("HOMO-LUMO gap", "the gap comparison is missing"),
+                ("Water", "the first molecule is not named"),
+                ("Ammonia", "the second molecule is not named"),
+            ):
+                if phrase not in text:
+                    fail.append(f"compare narration: {why}")
+            if len(text) < 200:
+                fail.append(
+                    f"compare narration is a stub ({len(text)} chars)")
+            nbad = len([f for f in FAILURES if f.startswith("compare")])
+            print(f"[{'PASS' if nbad == 0 else 'FAIL'}] compare/water+ammonia", flush=True)
+        else:
+            fail.append(f"compare: job {job.get('status')}")
+    else:
+        fail.append(f"compare: chat submit HTTP {code}")
+
+    # the narrative the UI shows must be a real sentence, not a stub
+    _, jobs = _req("GET", "/api/jobs")
+    if isinstance(jobs, dict) and jobs.get("jobs"):
+        short = [j["id"] for j in jobs["jobs"] if j.get("status") == "completed"]
+        if short:
+            _, full = _req("GET", f"/api/job/{short[0]}")
+            if isinstance(full, dict):
+                text = full.get("explanation") or ""
+                if len(text) < 80:
+                    fail.append(f"narration too short ({len(text)} chars)")
+                print(f"[{'PASS' if len(text) >= 80 else 'FAIL'}] "
+                      f"narrative length = {len(text)} chars", flush=True)
+
+    # the interpretation must stay scientifically honest: a Kohn-Sham gap is
+    # not an optical gap, and a large gap does not imply a saturated molecule
+    # (benzene and pyridine both have gaps above 6 eV).
+    code, resp = _req("POST", "/api/job", {"molecule": "benzene", "kind": "single_point",
+                                           "functional": "b3lyp", "basis": "6-31g*"})
+    if code == 200 and isinstance(resp, dict) and resp.get("job_id"):
+        job = _wait(resp["job_id"])
+        text = (job.get("explanation") or "").lower()
+        for phrase, why in [
+            ("not an optical gap", "the KS-gap caveat is missing"),
+            ("does not identify the bonding", "the gap is over-interpreted"),
+        ]:
+            if phrase not in text:
+                fail.append(f"narration: {why} ('{phrase}' absent)")
+        bad = [p for p in ("saturated molecule -", "small conjugated system")
+               if p in text]
+        if bad:
+            fail.append(f"narration: contains misleading claim(s) {bad}")
+        nbad = len([f for f in FAILURES if f.startswith("narration")])
+        print(f"[{'PASS' if nbad == 0 else 'FAIL'}] narration scientific honesty",
+              flush=True)
+
+    # the narration must name the atom that really carries the most HOMO
+    # density.  ``frontier_orbitals`` is ordered by atom index, so taking the
+    # first entry is wrong: naphthalene once reported C1 (7.5%) as the reactive
+    # site when C3/C5/C8/C10 each carried 17.5% -- a different position, and
+    # silent, because the sentence still read plausibly.
+    def homo_narration(molecule):
+        code, resp = _req("POST", "/api/job", {"molecule": molecule,
+                                               "kind": "single_point",
+                                               "functional": "b3lyp",
+                                               "basis": "6-31g*"})
+        if code != 200 or not isinstance(resp, dict) or not resp.get("job_id"):
+            return None, None
+        job = _wait(resp["job_id"])
+        comp = ((job.get("result") or {}).get("frontier_orbitals") or {}).get("homo") or []
+        return job.get("explanation") or "", comp
+
+    text, comp = homo_narration("naphthalene")
+    nbad = 0
+    if text is None:
+        fail.append("narration: naphthalene HOMO job did not run")
+        nbad += 1
+    else:
+        ranked = sorted(comp, key=lambda c: c["percent"], reverse=True)
+        if not ranked:
+            fail.append("narration: naphthalene HOMO composition is empty")
+            nbad += 1
+        else:
+            label = f"{ranked[0]['symbol']}{ranked[0]['atom']}"
+            if label not in text:
+                fail.append(
+                    f"narration: largest HOMO contributor {label} "
+                    f"({ranked[0]['percent']}%) is not named")
+                nbad += 1
+            if "delocalised" not in text.lower():
+                fail.append(
+                    "narration: a delocalised HOMO is described as localised")
+                nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] narration names the true HOMO site",
+          flush=True)
+
+    # a lone-pair HOMO really is localised, so the opposite wording is required
+    text, comp = homo_narration("water")
+    nbad = 0
+    if text is None:
+        fail.append("narration: water HOMO job did not run")
+        nbad += 1
+    elif "concentrated on O1" not in text:
+        fail.append("narration: a lone-pair HOMO is not described as localised")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] narration localises a lone-pair HOMO",
+          flush=True)
+
+    # Population analysis: the narration must name the atom the numbers point
+    # at, and must not describe a charge *separation* as a concentration.  The
+    # old wording listed the three largest-magnitude atoms under "concentrates
+    # charge on", so water read "concentrates charge on O1 (-0.36), H2 (+0.18),
+    # H3 (+0.18)" -- the two ends of the molecular dipole called one site.
+    def charge_narration(molecule):
+        code, resp = _req("POST", "/api/job", {"molecule": molecule,
+                                               "kind": "single_point",
+                                               "functional": "b3lyp",
+                                               "basis": "6-31g*"})
+        if code != 200 or not isinstance(resp, dict) or not resp.get("job_id"):
+            return None, []
+        job = _wait(resp["job_id"])
+        rows = (job.get("result") or {}).get("mulliken_charges") or []
+        return job.get("explanation") or "", rows
+
+    nbad = 0
+    for molecule in ("water", "acetone"):
+        text, rows = charge_narration(molecule)
+        tag = f"charge narration/{molecule}"
+        if text is None:
+            fail.append(f"{tag}: job did not run")
+            nbad += 1
+            continue
+        if not rows:
+            fail.append(f"{tag}: no Mulliken charges returned")
+            nbad += 1
+            continue
+        ext = max(rows, key=lambda r: abs(r["charge"]))
+        label = f"{ext['symbol']}{ext['atom']}"
+        if label not in text:
+            fail.append(
+                f"{tag}: largest-magnitude atom {label} "
+                f"({ext['charge']:+.3f} e) is not named")
+            nbad += 1
+        rich = min(r["charge"] for r in rows)
+        poor = max(r["charge"] for r in rows)
+        if rich <= -0.15 and poor >= 0.15 and "separates charge" not in text:
+            fail.append(
+                f"{tag}: both ends are charged ({rich:+.3f}/{poor:+.3f}) but "
+                f"the text does not call it a separation")
+            nbad += 1
+        if "concentrates charge" in text:
+            fail.append(f"{tag}: still says 'concentrates charge'")
+            nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] "
+          f"charge narration names the true extrema", flush=True)
+
+    # Frontier-orbital composition must be a real partition of the orbital.
+    # It used to be the naive sum of |c|^2 over each atom's AOs, which drops
+    # every overlap cross term -- MOs are normalised as c^T S c = 1, not
+    # c^T c = 1.  That agreed well enough on HOMOs, so nothing looked wrong,
+    # but it inverted water's LUMO: it reported O1 46% / H2 27% / H3 27% for
+    # an O-H antibonding orbital whose weight really sits on the hydrogens
+    # (H 36% / H 36% / O 27% by Loewdin, or H 53% each with O *negative* by
+    # Mulliken, the cross terms being negative in an antibonding orbital).
+    def frontier(molecule):
+        code, resp = _req("POST", "/api/job", {"molecule": molecule,
+                                               "kind": "single_point",
+                                               "functional": "b3lyp",
+                                               "basis": "6-31g*"})
+        if code != 200 or not isinstance(resp, dict) or not resp.get("job_id"):
+            return None
+        job = _wait(resp["job_id"])
+        return (job.get("result") or {}).get("frontier_orbitals")
+
+    nbad = 0
+    for molecule in ("water", "naphthalene", "pyridine"):
+        fo = frontier(molecule)
+        tag = f"frontier/{molecule}"
+        if not fo:
+            fail.append(f"{tag}: no frontier composition returned")
+            nbad += 1
+            continue
+        for key in ("homo", "lumo"):
+            rows = fo.get(key) or []
+            if not rows:
+                fail.append(f"{tag}.{key}: empty")
+                nbad += 1
+                continue
+            bad = [r for r in rows
+                   if not (0.0 <= float(r.get("percent", -1.0)) <= 100.0)]
+            if bad:
+                fail.append(
+                    f"{tag}.{key}: {len(bad)} contribution(s) outside 0-100% "
+                    f"(min {min(float(r['percent']) for r in bad):.2f})")
+                nbad += 1
+            total = sum(float(r["percent"]) for r in rows)
+            if total > 100.5:
+                fail.append(
+                    f"{tag}.{key}: contributions sum to {total:.1f}% -- "
+                    f"not a partition of one orbital")
+                nbad += 1
+    # The targeted physics check: water's LUMO is O-H antibonding, so its
+    # weight belongs on the hydrogens.  The naive scheme named oxygen.
+    fo = frontier("water")
+    if fo and fo.get("lumo"):
+        top = max(fo["lumo"], key=lambda r: r["percent"])
+        if top["symbol"] != "H":
+            fail.append(
+                f"frontier/water.lumo: dominated by {top['symbol']}"
+                f"{top['atom']} ({top['percent']:.1f}%), but the LUMO is "
+                f"O-H antibonding and its weight lies on the hydrogens")
+            nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] "
+          f"frontier composition is a real partition", flush=True)
+
+    # the TD-DFT narration must call the *strongest* transition strongest.
+    # ``excited_states`` is ordered by energy, so the first bright state is not
+    # it: naphthalene's S1 has f = 0.094 while S4 has f = 1.99.
+    code, resp = _req("POST", "/api/job", {"molecule": "naphthalene",
+                                           "kind": "excited_states",
+                                           "functional": "b3lyp",
+                                           "basis": "6-31g*", "nstates": 6})
+    nbad = 0
+    if code == 200 and isinstance(resp, dict) and resp.get("job_id"):
+        job = _wait(resp["job_id"])
+        states = (job.get("result") or {}).get("excited_states") or []
+        text = job.get("explanation") or ""
+        if not states:
+            fail.append("tddft: no excited states returned")
+            nbad += 1
+        else:
+            top = max(states, key=lambda s: s.get("oscillator_strength") or 0.0)
+            if f"strongest transition is S{top['state']}" not in text:
+                fail.append(
+                    f"tddft narration: the strongest transition is S{top['state']} "
+                    f"(f = {top.get('oscillator_strength'):.4f}) but the text does "
+                    f"not say so")
+                nbad += 1
+    else:
+        fail.append("tddft: excited-state job did not run")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] narration names the strongest transition",
+          flush=True)
+
+    # ------------------------------------------------------------------
+    #  the UV-Vis figure
+    # ------------------------------------------------------------------
+    # A stick list of oscillator strengths is not a spectrum.  The server has
+    # always built the broadened curve ("the state list alone is not a
+    # figure") and for a long time nothing drew it, while the pane promised
+    # "the absorption curve".  These assertions are what would have caught
+    # that, plus the two ways a spectrum can be quietly wrong: a wavelength
+    # that does not match its own energy, and a band shifted by broadening in
+    # wavelength space instead of energy space.
+    nbad = 0
+    if code == 200 and isinstance(resp, dict) and resp.get("job_id"):
+        res = job.get("result") or {}
+        if not states:
+            fail.append("uvvis: no excited states to build a curve from")
+            nbad += 1
+        for s in states:
+            e, lam = s.get("energy_ev"), s.get("wavelength_nm")
+            if e and lam and abs(e * lam - 1239.84198) > 0.5:
+                fail.append(
+                    f"uvvis: S{s.get('state')} is {e:.4f} eV at {lam:.1f} nm, "
+                    f"but E*lambda is {e * lam:.1f} and must be 1239.84")
+                nbad += 1
+            fosc = s.get("oscillator_strength")
+            if fosc is not None and fosc < -1e-9:
+                fail.append(
+                    f"uvvis: S{s.get('state')} has a negative oscillator "
+                    f"strength ({fosc:.4g}); a transition can be dark but not "
+                    f"negative")
+                nbad += 1
+        uv = res.get("uv_spectrum") or {}
+        xs, ys = uv.get("x") or [], uv.get("y") or []
+        if not xs or not ys or len(xs) != len(ys):
+            fail.append(
+                "uvvis: no broadened absorption curve in the result. A paper "
+                "plots a spectrum, not a stick list, so the figure cannot be "
+                "drawn from this payload.")
+            nbad += 1
+        else:
+            if abs(max(ys) - 100.0) > 1e-6 or min(ys) < -1e-9:
+                fail.append(
+                    f"uvvis: the curve spans {min(ys):.3f}..{max(ys):.3f}; a "
+                    f"normalised absorbance must run from 0 to 100")
+                nbad += 1
+            # and the band has to sit where the strongest state is: broadened
+            # in wavelength space instead of energy space it slides
+            peak = xs[max(range(len(ys)), key=lambda i: ys[i])] if states else 0
+            want = 1239.84198 / top["energy_ev"] if states else 0
+            if states and (top.get("oscillator_strength") or 0) > 0.05 \
+                    and abs(peak - want) > 6.0:
+                fail.append(
+                    f"uvvis: the curve peaks at {peak:.1f} nm but the strongest "
+                    f"state (S{top['state']}, f="
+                    f"{top['oscillator_strength']:.3f}) is at {want:.1f} nm -- "
+                    f"a broadening artefact, not the spectrum")
+                nbad += 1
+            # the absolute ordinate and the sum rule have to survive the trip
+            # through the API, not just exist inside uv_curve
+            eps = uv.get("epsilon") or []
+            if len(eps) != len(xs):
+                fail.append(
+                    f"uvvis: the payload ships {len(xs)} wavelengths but "
+                    f"{len(eps)} absolute eps values; the paper-ready ordinate "
+                    f"is missing")
+                nbad += 1
+            srule = uv.get("sum_rule") or {}
+            if srule.get("residual_pct") is None:
+                fail.append(
+                    "uvvis: the payload carries no sum-rule residual, so "
+                    "nothing states whether the absolute scale is right")
+                nbad += 1
+            if not uv.get("window_nm"):
+                fail.append(
+                    "uvvis: the payload does not report the plotted window, so "
+                    "a figure captioned from it cannot be reproduced")
+                nbad += 1
+            elif uv.get("window_source") == "auto":
+                win = uv["window_nm"]
+                for s in states:
+                    lam = s.get("wavelength_nm")
+                    if lam and (s.get("oscillator_strength") or 0) > 0.05 \
+                            and not (win[0] <= lam <= win[1]):
+                        fail.append(
+                            f"uvvis: the auto window {win} excludes bright "
+                            f"S{s['state']} at {lam:.1f} nm")
+                        nbad += 1
+        if not res.get("excited_method"):
+            fail.append(
+                "uvvis: the result does not say whether it ran TDA or full "
+                "TD-DFT, so the figure cannot be reproduced from it")
+            nbad += 1
+    else:
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] the UV-Vis curve is computed, "
+          f"labelled and not shifted by its broadening", flush=True)
+
+    uv_scale_sections(FAILURES)
+    raman_sections(FAILURES)
+
+    # ------------------------------------------------------------------
+    #  vibrational analysis
+    # ------------------------------------------------------------------
+    # Three independent physics assertions, each of which failed before:
+    #   * the entropy once came out as 388 J/mol/K (a dead `max(i, 1e-40)`
+    #     floor on the moments of inertia, which are ~1e-47 kg m^2);
+    #   * `hessian.RHF(mf)` on an RKS object silently drops the XC second
+    #     derivative and gives 2151/2952/3271 cm-1;
+    #   * the symmetry number was never passed in, so S_rot was off by R ln2.
+    nbad = 0
+    code, resp = _req("POST", "/api/job", {"molecule": "water",
+                                           "kind": "vibrations",
+                                           "functional": "b3lyp",
+                                           "basis": "6-31g*",
+                                           "optimize_first": True})
+    if code == 200 and isinstance(resp, dict) and resp.get("job_id"):
+        job = _wait(resp["job_id"])
+        vres = job.get("result") or {}
+        freq = vres.get("frequencies_cm1") or []
+        therm = vres.get("thermochemistry") or {}
+        ir = vres.get("ir_spectrum") or {}
+        if len(freq) != 3:
+            fail.append(
+                f"vibrations/water: {len(freq)} modes, expected 3 "
+                f"(3N-6 for N = 3)")
+            nbad += 1
+        if vres.get("n_imaginary"):
+            fail.append(
+                f"vibrations/water: {vres['n_imaginary']} imaginary mode(s) "
+                f"at a verified minimum")
+            nbad += 1
+        # harmonic B3LYP/6-31G* water: 1711 / 3722 / 3846 cm-1 (unscaled).
+        # A 1000 cm-1 window catches a missing XC second derivative, which
+        # shifts the bend up by ~440 cm-1 and the stretches down by ~770.
+        for f in freq:
+            if not (1300.0 <= f <= 4300.0):
+                fail.append(
+                    f"vibrations/water: frequency {f} cm-1 is outside the "
+                    f"plausible window (1300-4300) for this molecule")
+                nbad += 1
+        if not any(f > 3000.0 for f in freq):
+            fail.append("vibrations/water: no O-H stretch above 3000 cm-1")
+            nbad += 1
+        s = therm.get("entropy_j_mol_k")
+        if s is None:
+            fail.append("vibrations/water: no entropy returned")
+            nbad += 1
+        elif abs(s - 188.8) > 3.0:
+            fail.append(
+                f"vibrations/water: S0 = {s} J/mol/K, measured value is "
+                f"188.8 (off by {abs(s - 188.8):.1f})")
+            nbad += 1
+        if therm.get("symmetry_number") != 2:
+            fail.append(
+                f"vibrations/water: symmetry number "
+                f"{therm.get('symmetry_number')}, expected 2 (C2v)")
+            nbad += 1
+        # Frequencies are only frequencies at a stationary point, and the
+        # pre-optimisation is internal to this job.  If it did not reach one,
+        # 3N-6 numbers still arrive and still look like a spectrum, so the
+        # result has to carry the verdict itself.
+        if vres.get("opt_converged") is not True:
+            fail.append(
+                f"vibrations/water: the pre-optimisation is reported as "
+                f"opt_converged={vres.get('opt_converged')!r}; frequencies "
+                f"are only meaningful at a stationary point")
+            nbad += 1
+        if not isinstance(vres.get("opt_grms"), (int, float)):
+            fail.append(
+                "vibrations/water: no residual gradient (opt_grms) from the "
+                "pre-optimisation, so the convergence claim cannot be judged")
+            nbad += 1
+        # An IR spectrum is a figure, and a figure has to say what produced
+        # it.  This result used to carry frequencies and nothing else -- no
+        # functional, no basis, no energy -- so the spectrum could not be
+        # captioned from its own payload and the Properties pane went blank
+        # beside it.
+        for k in ("functional", "basis", "functional_label", "basis_label"):
+            if not vres.get(k):
+                fail.append(
+                    f"vibrations/water: no '{k}' in the result, so the "
+                    f"spectrum cannot be captioned with the level of theory "
+                    f"that produced it")
+                nbad += 1
+        if not isinstance(vres.get("energy_hartree"), (int, float)):
+            fail.append(
+                "vibrations/water: no total energy in the result; the "
+                "Hessian was evaluated somewhere, and a figure has to say "
+                "where")
+            nbad += 1
+        # explain_vibrations() builds its "at the X / Y level" from these
+        # fields.  They were absent, so every IR narration read "at the  /
+        # level" -- a figure with a blank caption -- and nothing failed.
+        expl = str(job.get("explanation") or "")
+        if vres.get("functional_label") and vres["functional_label"] not in expl:
+            fail.append(
+                f"vibrations/water: the narration never names "
+                f"{vres['functional_label']!r}; it claims a level of theory "
+                f"built from fields the result did not carry")
+            nbad += 1
+        if len(ir.get("x") or []) < 100 or not ir.get("peaks"):
+            fail.append(
+                f"vibrations/water: IR curve has "
+                f"{len(ir.get('x') or [])} points and "
+                f"{len(ir.get('peaks') or [])} peaks")
+            nbad += 1
+        else:
+            xs = ir["x"]
+            if xs[0] < xs[-1]:
+                fail.append(
+                    "vibrations/water: IR axis runs low-to-high; the "
+                    "convention is high wavenumber on the left")
+                nbad += 1
+
+        raman_payload_sections(vres, FAILURES)
+    else:
+        fail.append("vibrations: job did not run")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] vibrational analysis is physical",
+          flush=True)
+
+    # ------------------------------------------------------------------
+    #  the absolute polarizability, at a basis that can carry one
+    # ------------------------------------------------------------------
+    # Everything asserted about Raman so far is a *ratio* -- band heights
+    # relative to each other, rho, the sum rule.  None of it can see a
+    # polarizability that is uniformly too small, which is exactly the failure
+    # mode of a basis without diffuse functions: water comes out at 5.13 a.u.
+    # at 6-31G* and 9.89 at aug-cc-pVTZ, a factor of two, with every ratio
+    # inside the molecule unchanged.
+    #
+    # So this runs the same molecule at a diffuse basis and compares against
+    # the measured value.  alpha_iso of water is 9.6-9.9 a.u. from experiment
+    # (1.42-1.47 A^3); B3LYP/aug-cc-pVDZ is known to come in slightly low at
+    # 9.47, which is why the window below is 9.0-10.5 rather than the
+    # experimental range itself.
+    nbad = 0
+    code, resp = _req("POST", "/api/job", {"molecule": "water",
+                                           "kind": "vibrations",
+                                           "functional": "b3lyp",
+                                           "basis": "aug-cc-pvdz",
+                                           "with_raman": True})
+    if code == 200 and isinstance(resp, dict) and resp.get("job_id"):
+        job = _wait(resp["job_id"], timeout=900.0)
+        vres = job.get("result") or {}
+        ram = vres.get("raman") or {}
+        iso = ram.get("alpha_iso_au")
+        if iso is None:
+            fail.append(
+                "raman/abs: no alpha_iso at aug-cc-pVDZ, so the absolute "
+                "polarizability is never checked")
+            nbad += 1
+        elif not (9.0 <= float(iso) <= 10.5):
+            fail.append(
+                f"raman/abs: alpha_iso of water at B3LYP/aug-cc-pVDZ is "
+                f"{iso} a.u.; the measured value is 9.6-9.9 and the "
+                f"converged B3LYP value 9.5-9.9, so a number outside 9.0-10.5 "
+                f"means the polarizability kernel is wrong, not the basis")
+            nbad += 1
+        # The tensor has to be symmetric and positive definite: alpha is a
+        # response function, so a negative eigenvalue would mean the molecule
+        # is destabilised by a field, which is unphysical for a closed-shell
+        # ground state.
+        ten = ram.get("alpha_tensor_au")
+        if ten:
+            a = np.asarray(ten, dtype=float)
+            if np.abs(a - a.T).max() > 1e-6:
+                fail.append(
+                    f"raman/abs: the polarizability tensor is not symmetric "
+                    f"(max asymmetry {np.abs(a - a.T).max():.2e})")
+                nbad += 1
+            ev = np.linalg.eigvalsh(0.5 * (a + a.T))
+            if ev.min() <= 0.0:
+                fail.append(
+                    f"raman/abs: the polarizability tensor has a "
+                    f"non-positive eigenvalue ({ev.min():.4f}), which would "
+                    f"mean a field destabilises the molecule")
+                nbad += 1
+            # Water is not spherical: the out-of-plane component is the
+            # smallest, and by a few per cent.  A tensor that came back
+            # isotropic would mean the three directions were never
+            # distinguished, which a symmetrisation bug does.
+            diag = np.diag(a)
+            if not (diag.max() / max(diag.min(), 1e-9) > 1.02):
+                fail.append(
+                    f"raman/abs: the water tensor came back isotropic "
+                    f"({diag}); the out-of-plane component is measurably the "
+                    f"smallest")
+                nbad += 1
+        if ram.get("alpha_reliable") is not True:
+            fail.append(
+                f"raman/abs: alpha_reliable is {ram.get('alpha_reliable')!r} "
+                f"at aug-cc-pVDZ, which does have diffuse functions")
+            nbad += 1
+        if ram.get("basis_warning"):
+            fail.append(
+                "raman/abs: a basis warning was raised at aug-cc-pVDZ, which "
+                "does have diffuse functions -- the warning would then be "
+                "noise rather than a signal")
+            nbad += 1
+        # And the spectrum has to be drawn from the diffuse basis too.
+        sp = vres.get("raman_spectrum") or {}
+        if len(sp.get("peaks") or []) != len(vres.get("frequencies_cm1") or []):
+            fail.append(
+                f"raman/abs: {len(sp.get('peaks') or [])} Raman peaks for "
+                f"{len(vres.get('frequencies_cm1') or [])} modes")
+            nbad += 1
+        # rho at the diffuse basis should be near the measured gas-phase
+        # values: the symmetric stretch strongly polarised (measured ~0.06)
+        # and the asymmetric stretch at the 3/4 limit.
+        act = [float(v) for v in (ram.get("activities_a4_amu") or [])]
+        rho = [float(v) for v in (ram.get("depolarization") or [])]
+        freq = vres.get("frequencies_cm1") or []
+        if act and rho and len(act) == len(rho) == len(freq):
+            top = max(range(len(act)), key=lambda i: act[i])
+            if freq[top] < 3400.0:
+                fail.append(
+                    f"raman/abs: the strongest Raman line is at {freq[top]} "
+                    f"cm-1, not an O-H stretch")
+                nbad += 1
+            if rho[top] > 0.35:
+                fail.append(
+                    f"raman/abs: the strongest Raman line has rho = "
+                    f"{rho[top]:.3f}; water's symmetric stretch is strongly "
+                    f"polarised (measured ~0.06, so a value near 0.75 would "
+                    f"mean the isotropic and anisotropic parts were swapped)")
+                nbad += 1
+            if not any(abs(r - 0.75) < 5e-3 for r in rho):
+                fail.append(
+                    f"raman/abs: no mode at rho = 0.750; the B2 asymmetric "
+                    f"stretch has no isotropic derivative. Got {rho}")
+                nbad += 1
+    else:
+        fail.append("raman/abs: the diffuse-basis job did not run")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] the absolute polarizability "
+          f"matches experiment at a diffuse basis", flush=True)
+
+    # ------------------------------------------------------------------
+    #  vibrational analysis on a geometry that was never relaxed
+    # ------------------------------------------------------------------
+    # The block above asserts `opt_converged is True`, which a flag that is
+    # simply always True would satisfy.  This is the opposite direction: run
+    # the same code path with a pre-optimisation that is stopped two steps
+    # from a deliberately strained start, and check the non-convergence
+    # reaches the frequency result instead of dying on a discarded engine.
+    nbad = 0
+    try:
+        from backend.engine.analysis import vibrations
+        from backend.engine.dft import DFTEngine
+
+        class _Starved(DFTEngine):
+            """The real optimiser, only not allowed to finish."""
+
+            def optimize(self, max_steps: int = 40, progress=None) -> dict:
+                return super().optimize(max_steps=2, progress=progress)
+
+        starved_xyz = "3\nwater\nO 0 0 0\nH 1.26 0 0.48\nH -1.26 0 0.48\n"
+        sv = vibrations(
+            _Starved(atom_xyz=starved_xyz, charge=0, multiplicity=1,
+                     functional="b3lyp", basis="6-31g*"),
+            optimize_first=True,
+        )
+        if sv.get("opt_converged") is not False:
+            fail.append(
+                f"vibrations/starved: frequencies on a geometry whose "
+                f"pre-optimisation was cut short after 2 steps report "
+                f"opt_converged={sv.get('opt_converged')!r}; the verdict did "
+                f"not travel from the optimisation to the frequencies")
+            nbad += 1
+        if not any("did not converge" in str(w)
+                   for w in (sv.get("warnings") or [])):
+            fail.append(
+                "vibrations/starved: the unconverged pre-optimisation left no "
+                "warning in the result, so the frequencies will be read as a "
+                "minimum's")
+            nbad += 1
+        gr = sv.get("opt_grms")
+        if not isinstance(gr, (int, float)) or gr <= 0.0:
+            fail.append(f"vibrations/starved: opt_grms is {gr!r}")
+            nbad += 1
+    except Exception as exc:                             # noqa: BLE001
+        fail.append(f"vibrations/starved: the check could not run: {exc}")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] frequencies on an unrelaxed "
+          f"geometry say so instead of passing for a minimum", flush=True)
+
+    # ------------------------------------------------------------------
+    #  the frequency scale factor belongs to the method
+    # ------------------------------------------------------------------
+    # Harmonic frequencies are scaled before being compared with a measured
+    # band, and the factor is fitted per functional *and* basis.  0.961 is
+    # B3LYP/6-31G* and nothing else; it used to be applied to every level.
+    # At HF/6-31G* the published factor is 0.899, so water's bands came out
+    # 113 / 251 / 259 cm-1 too high -- and the narration called it "the
+    # 0.961 factor standard for this level of theory".
+    nbad = 0
+    try:
+        from backend.engine.analysis import freq_scale
+
+        for func, basis, want in (("hf", "6-31g*", 0.899),
+                                  ("b3lyp", "6-31g*", 0.960),
+                                  ("blyp", "6-31g*", 0.992)):
+            got, src = freq_scale(func, basis)
+            if abs(got - want) > 1e-9:
+                fail.append(
+                    f"scale/{func}-{basis}: {got}, expected the CCCBDB value "
+                    f"{want}")
+                nbad += 1
+            if "CCCBDB" not in str(src):
+                fail.append(
+                    f"scale/{func}-{basis}: the source is {src!r}; a borrowed "
+                    f"scale factor has to say where it came from")
+                nbad += 1
+        # and a level with no published factor gets none, plus a reason
+        got, src = freq_scale("m06l", "def2-svp")
+        if abs(got - 1.0) > 1e-9:
+            fail.append(
+                f"scale/m06l-def2-svp: {got}, but no factor is published for "
+                f"that level -- applying one borrowed from another method is "
+                f"the bug this replaced")
+            nbad += 1
+        if "no frequency scale factor" not in str(src).lower():
+            fail.append(
+                f"scale/m06l-def2-svp: applying no factor but not saying why "
+                f"({src!r}); the reader cannot tell 'unscaled on purpose' "
+                f"from 'forgot to scale'")
+            nbad += 1
+    except Exception as exc:                             # noqa: BLE001
+        fail.append(f"scale: the check could not run: {exc}")
+        nbad += 1
+
+    # ... and the number has to reach the curve, not just sit in the payload:
+    # the whole IR spectrum is shifted by it.
+    code, resp = _req("POST", "/api/job", {"molecule": "water",
+                                           "kind": "vibrations",
+                                           "functional": "hf",
+                                           "basis": "6-31g*"})
+    if code == 200 and isinstance(resp, dict) and resp.get("job_id"):
+        hf_job = _wait(resp["job_id"])
+        hres = hf_job.get("result") or {}
+        hir = hres.get("ir_spectrum") or {}
+        if abs(float(hres.get("freq_scale") or 0) - 0.899) > 1e-9:
+            fail.append(
+                f"scale/hf: an HF/6-31G* frequency run reports freq_scale="
+                f"{hres.get('freq_scale')}, expected 0.899")
+            nbad += 1
+        if abs(float(hir.get("scale_factor") or 0) - 0.899) > 1e-9:
+            fail.append(
+                f"scale/hf: the IR curve was built with scale_factor="
+                f"{hir.get('scale_factor')}, so every band is shifted by the "
+                f"B3LYP factor instead of HF's")
+            nbad += 1
+        for pk in (hir.get("peaks") or [])[:1]:
+            want = pk["frequency_cm1"] * 0.899
+            if abs(pk["scaled_cm1"] - want) > 1.0:
+                fail.append(
+                    f"scale/hf: band {pk['frequency_cm1']} cm-1 is reported "
+                    f"scaled to {pk['scaled_cm1']}, expected {want:.0f}")
+                nbad += 1
+    else:
+        fail.append(f"scale/hf: job did not run (HTTP {code})")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] the frequency scale factor is "
+          f"the one published for the level that ran", flush=True)
+
+    # ------------------------------------------------------------------
+    #  IR intensities on an absolute scale
+    # ------------------------------------------------------------------
+    # A wrong absolute scale is invisible: the plotted curve is normalised to
+    # 100 before it is drawn, so a spectrum whose every band is 4x too intense
+    # looks exactly like a correct one.  The old projection divided PySCF's
+    # norm_mode by sqrt(m) a SECOND time -- norm_mode is already mass-weighted
+    # -- which reweights each atom's contribution by 1/sqrt(m_a): oxygen by
+    # 1/4 next to hydrogen.  Mass-dependent, so no single constant repairs it.
+    #
+    # The guard is the intensity sum rule, which needs no published value and
+    # no unit convention: in mass-weighted coordinates the 3N-6 modes plus 3
+    # translations plus 3 rotations span the space and an orthogonal change of
+    # basis preserves the sum of squares, so
+    #   sum_i |dmu/dQ_i|^2 == APT trace - (rotation) - (translation).
+    # Water's rotational term is FOUR TIMES the vibrational one, so a sum rule
+    # that omits it reports a 50% error for a perfect projection -- hence the
+    # separate assertion that it is present and non-zero.
+    nbad = 0
+    for label, res in (("ir/water", vres),):
+        sr = res.get("ir_sum_rule") or {}
+        if not sr:
+            fail.append(
+                f"{label}: no `ir_sum_rule` in the result, so nothing says "
+                f"whether the intensities are on an absolute scale at all")
+            nbad += 1
+            continue
+        resid = sr.get("residual_pct")
+        if resid is None:
+            fail.append(f"{label}: ir_sum_rule carries no residual ({sr})")
+            nbad += 1
+        elif abs(float(resid)) > 0.5:
+            fail.append(
+                f"{label}: the intensity sum rule is off by {resid}% -- the "
+                f"projection onto the normal modes does not conserve "
+                f"sum|dmu/dQ|^2 (got {sr.get('vibrational_d2_amu_a2')}, "
+                f"expected {sr.get('expected_d2_amu_a2')} D^2/amu/A^2), so "
+                f"the km/mol values are not on an absolute scale")
+            nbad += 1
+        if float(sr.get("rotational_d2_amu_a2") or 0) <= 0.0:
+            fail.append(
+                f"{label}: the rotational term of the sum rule is zero; for "
+                f"water it is four times the vibrational term, so the test "
+                f"is not really being applied")
+            nbad += 1
+        # Per-mode regression.  The sum rule above is a physical law and is
+        # what catches a systematic misweighting; this is here for the error it
+        # cannot see -- a redistribution between modes that leaves the total
+        # intact.  These are the values the sum-rule-verified projection gives
+        # at B3LYP/6-31G*, and the band is deliberately loose (10%): the point
+        # is to catch a coding error, not to police the method.
+        refs = (("bend", 79.6), ("sym stretch", 1.8), ("asym stretch", 20.1))
+        got = res.get("ir_intensities_km_mol") or []
+        if len(got) == len(refs):
+            for (name, ref), g in zip(refs, got):
+                g = float(g)
+                if abs(g - ref) > max(0.10 * ref, 0.15):
+                    fail.append(
+                        f"{label}: the {name} intensity is {g} km/mol, "
+                        f"expected {ref} at B3LYP/6-31G* (+-10%)")
+                    nbad += 1
+        units = str(res.get("ir_intensity_units") or "")
+        if "km/mol" not in units:
+            fail.append(
+                f"{label}: `ir_intensity_units` is {units!r}; a figure caption "
+                f"cannot state whether these are napierian or decadic without "
+                f"naming the unit")
+            nbad += 1
+
+    # A second molecule whose heavy atom is three times oxygen's mass: the
+    # mass-dependence of the old bug does not show up in water alone.
+    try:
+        from backend.engine.dft import DFTEngine
+        from backend.engine.analysis import vibrations as _vib
+        h2s = _vib(DFTEngine(atom_xyz="3\nh2s\n"
+                                      "S 0.000000  0.000000  0.102000\n"
+                                      "H 0.000000  0.958400 -0.816000\n"
+                                      "H 0.000000 -0.958400 -0.816000\n",
+                             charge=0, multiplicity=1,
+                             functional="b3lyp", basis="6-31g*"))
+        sr = h2s.get("ir_sum_rule") or {}
+        resid = sr.get("residual_pct")
+        if resid is None:
+            fail.append(f"ir/h2s: no sum-rule residual ({sr})")
+            nbad += 1
+        elif abs(float(resid)) > 0.5:
+            fail.append(
+                f"ir/h2s: the intensity sum rule is off by {resid}% "
+                f"(got {sr.get('vibrational_d2_amu_a2')}, expected "
+                f"{sr.get('expected_d2_amu_a2')}).  How far off a 1/sqrt(m_a) "
+                f"reweighting lands depends on the mass distribution -- water "
+                f"shows -9.2%, H2S only -1.3% -- so one molecule is not "
+                f"enough to detect it")
+            nbad += 1
+    except Exception as exc:                                 # noqa: BLE001
+        fail.append(f"ir/h2s: the check could not run: {exc}")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] IR intensities are on an "
+          f"absolute scale (sum rule closes to <0.5%)", flush=True)
+
+    # ------------------------------------------------------------------
+    #  bonding: Mayer bond orders and Hirshfeld charges
+    # ------------------------------------------------------------------
+    # Two new tables, each with a property that can be checked without a
+    # published number:
+    #   * Hirshfeld charges must sum to the molecular charge -- exactly, by
+    #     construction, up to grid quadrature.
+    #   * Chemically equivalent atoms must come out equivalent.  This is what
+    #     fails if the free-atom density is not spherically averaged: an
+    #     unaveraged carbon or oxygen is orientation-dependent, and water's two
+    #     hydrogens then get -0.291/+0.158/+0.133 instead of two equal +0.159.
+    #   * Hirshfeld must move far less than Mulliken when the basis grows --
+    #     the whole reason to prefer it.
+    # Plus the published Mayer bond orders as regression values.
+    WATER_XYZ = ("3\nwater\nO 0.0 0.0 0.1173\n"
+                 "H 0.0 0.7572 -0.4692\nH 0.0 -0.7572 -0.4692\n")
+    CH4_XYZ = ("5\nmethane\nC 0.0 0.0 0.0\n"
+               "H 0.6291 0.6291 0.6291\nH -0.6291 -0.6291 0.6291\n"
+               "H -0.6291 0.6291 -0.6291\nH 0.6291 -0.6291 -0.6291\n")
+    METHYL_XYZ = ("4\nmethyl\nC 0.0 0.0 0.0\nH 0.6291 0.6291 0.6291\n"
+                  "H -0.6291 -0.6291 0.6291\nH -0.6291 0.6291 -0.6291\n")
+    NH4_XYZ = ("5\nammonium\nN 0.0 0.0 0.0\nH 0.6 0.6 0.6\n"
+               "H -0.6 -0.6 0.6\nH -0.6 0.6 -0.6\nH 0.6 -0.6 -0.6\n")
+
+    def _bond(xyz, basis="6-31g*", charge=0, mult=1):
+        from backend.engine.dft import DFTEngine
+
+        eng = DFTEngine(atom_xyz=xyz, charge=charge, multiplicity=mult,
+                        functional="b3lyp", basis=basis)
+        return eng, eng.run_scf()
+
+    nbad = 0
+    try:
+        from backend.engine.bonding import bonding_analysis, mayer_bond_orders
+
+        for name, xyz, ref, tol in (
+                ("N2", "2\nn2\nN 0.0 0.0 0.0\nN 0.0 0.0 1.0977\n", 2.83, 0.12),
+                ("CO", "2\nco\nC 0.0 0.0 0.0\nO 0.0 0.0 1.1283\n", 2.40, 0.12),
+                ("water", WATER_XYZ, 0.80, 0.10),
+                ("methane", CH4_XYZ, 0.97, 0.10)):
+            e, _ = _bond(xyz)
+            m = mayer_bond_orders(e.mol, e.mf)
+            if not m.get("bonds"):
+                fail.append(f"bonding/mayer-{name}: no bonds above threshold")
+                nbad += 1
+                continue
+            got = float(m["bonds"][0]["order"])
+            if abs(got - ref) > tol:
+                fail.append(
+                    f"bonding/mayer-{name}: the strongest bond order is {got}, "
+                    f"the published value at this level is {ref} (+-{tol}).  "
+                    f"The spin-resolved convention would give {got/2:.3f}.")
+                nbad += 1
+        # equivalent bonds must be exactly equal, not merely close
+        e, _ = _bond(WATER_XYZ)
+        m = mayer_bond_orders(e.mol, e.mf)
+        if len(m["bonds"]) != 2 or abs(m["bonds"][0]["order"]
+                                       - m["bonds"][1]["order"]) > 1e-9:
+            fail.append(
+                f"bonding/mayer-water: the two O-H bonds must be equal by "
+                f"symmetry, got {[b['order'] for b in m['bonds']]}")
+            nbad += 1
+        e, _ = _bond(METHYL_XYZ, mult=2)
+        m = mayer_bond_orders(e.mol, e.mf)
+        orders = [b["order"] for b in m["bonds"]]
+        if len(orders) != 3 or max(orders) - min(orders) > 1e-9:
+            fail.append(
+                f"bonding/mayer-methyl: the three C-H bonds of a methyl "
+                f"radical must be equal, got {orders}")
+            nbad += 1
+        cval = next((v["valence"] for v in m["valence"]
+                     if v["symbol"] == "C"), None)
+        if cval is None or not (2.6 <= cval <= 3.4):
+            fail.append(
+                f"bonding/mayer-methyl: carbon's Mayer valence is {cval}, "
+                f"expected ~3 for CH3")
+            nbad += 1
+    except Exception as exc:                                 # noqa: BLE001
+        fail.append(f"bonding/mayer: the check could not run: {exc}")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] Mayer bond orders match the "
+          f"published values, and equivalent bonds are exactly equal",
+          flush=True)
+
+    nbad = 0
+    try:
+        from backend.engine.bonding import hirshfeld_charges
+
+        for name, xyz, q, mult in (("water", WATER_XYZ, 0, 1),
+                                   ("ammonium", NH4_XYZ, 1, 1)):
+            e, _ = _bond(xyz, charge=q, mult=mult)
+            charges, diag = hirshfeld_charges(e.mol, e.mf, "b3lyp")
+            err = abs(float(diag["charge_sum"]) - q)
+            if err > 1e-3:
+                fail.append(
+                    f"bonding/hirshfeld-{name}: the charges sum to "
+                    f"{diag['charge_sum']}, but the molecule carries {q:+d}; "
+                    f"the partition has lost or invented charge")
+                nbad += 1
+            wdev = float(diag.get("weight_sum_max_deviation", 1.0))
+            if wdev > 1e-9:
+                fail.append(
+                    f"bonding/hirshfeld-{name}: the promolecular weights miss "
+                    f"unity by up to {wdev:.2e} at a grid point that carries "
+                    f"density; they are not a partition of unity, so the "
+                    f"charges are not a partition of the electron count")
+                nbad += 1
+            if abs(float(diag["grid_integral_error_pct"])) > 0.01:
+                fail.append(
+                    f"bonding/hirshfeld-{name}: the density integrates to "
+                    f"{diag['grid_integral_electrons']} electrons instead of "
+                    f"{diag['n_electrons']} "
+                    f"({diag['grid_integral_error_pct']}%); the density was "
+                    f"evaluated wrongly and every charge below it is void")
+                nbad += 1
+        # equivalent atoms, and the spherical average that makes them so
+        e, _ = _bond(WATER_XYZ)
+        charges, _ = hirshfeld_charges(e.mol, e.mf, "b3lyp")
+        hs = [c["charge"] for c in charges if c["symbol"] == "H"]
+        if len(hs) != 2 or abs(hs[0] - hs[1]) > 1e-6:
+            fail.append(
+                f"bonding/hirshfeld-water: the two hydrogens must be "
+                f"equivalent, got {hs}.  Unequal hydrogens mean the free-atom "
+                f"density was not spherically averaged.")
+            nbad += 1
+        if not charges or charges[0]["symbol"] != "O" or charges[0]["charge"] >= 0:
+            fail.append(
+                f"bonding/hirshfeld-water: oxygen should carry the negative "
+                f"charge, got {charges[0]['charge'] if charges else None}")
+            nbad += 1
+    except Exception as exc:                                 # noqa: BLE001
+        fail.append(f"bonding/hirshfeld: the check could not run: {exc}")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] Hirshfeld charges sum to the "
+          f"molecular charge and equivalent atoms come out equivalent",
+          flush=True)
+
+    nbad = 0
+    try:
+        from backend.engine.bonding import hirshfeld_charges
+
+        sets = {}
+        for basis in ("6-31g*", "6-31g**"):
+            e, res = _bond(WATER_XYZ, basis=basis)
+            charges, _ = hirshfeld_charges(e.mol, e.mf, "b3lyp")
+            sets[basis] = (
+                [c["charge"] for c in charges],
+                [q["charge"] for q in (res.get("mulliken_charges") or [])],
+            )
+        if len(sets["6-31g*"][0]) == len(sets["6-31g**"][0]) > 0:
+            dh = max(abs(a - b) for a, b in zip(sets["6-31g*"][0],
+                                                sets["6-31g**"][0]))
+            dmk = max(abs(a - b) for a, b in zip(sets["6-31g*"][1],
+                                                 sets["6-31g**"][1]))
+            if not (dh < dmk):
+                fail.append(
+                    f"bonding/robustness: adding polarisation functions moved "
+                    f"Hirshfeld by {dh:.4f} and Mulliken by {dmk:.4f}; "
+                    f"Hirshfeld is supposed to be the basis-set-robust "
+                    f"partition, so these two look swapped")
+                nbad += 1
+    except Exception as exc:                                 # noqa: BLE001
+        fail.append(f"bonding/robustness: the check could not run: {exc}")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] Hirshfeld is the basis-set-"
+          f"robust partition (it moves less than Mulliken)", flush=True)
+
+    # The engine can compute all of this and the API still drop it -- the
+    # Properties pane reads the *job payload*, not the engine's return value.
+    # And a table nobody can read is not a result: the narration has to name
+    # the numbers, or the figure caption has to be written from scratch.
+    nbad = 0
+    code, resp = _req("POST", "/api/job", {"molecule": "water",
+                                           "kind": "single_point",
+                                           "functional": "b3lyp",
+                                           "basis": "6-31g*"})
+    if code == 200 and isinstance(resp, dict) and resp.get("job_id"):
+        job = _wait(resp["job_id"])
+        bd = (job.get("result") or {}).get("bonding") or {}
+        if bd.get("mayer_error") or bd.get("hirshfeld_error"):
+            fail.append(
+                f"bonding/api: the analysis failed on a plain water single "
+                f"point: {bd.get('mayer_error') or bd.get('hirshfeld_error')}")
+            nbad += 1
+        bonds = (bd.get("mayer") or {}).get("bonds") or []
+        if len(bonds) != 2:
+            fail.append(
+                f"bonding/api: a single point on water returns {len(bonds)} "
+                f"bond(s), expected the two O-H bonds; the bond table on the "
+                f"Properties pane would render empty")
+            nbad += 1
+        charges = (bd.get("hirshfeld") or {}).get("charges") or []
+        if len(charges) != 3:
+            fail.append(
+                f"bonding/api: a single point on water returns {len(charges)} "
+                f"Hirshfeld charge(s), expected 3")
+            nbad += 1
+        text = str(job.get("explanation") or "")
+        for want, why in (("Mayer bond orders", "the bond orders"),
+                          ("Hirshfeld", "the Hirshfeld charges")):
+            if want not in text:
+                fail.append(
+                    f"bonding/narration: the write-up never mentions "
+                    f"{why} ({want!r} absent); the numbers exist but a reader "
+                    f"has to go looking for them")
+                nbad += 1
+    else:
+        fail.append(f"bonding/api: job did not run (HTTP {code})")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] bond orders and Hirshfeld "
+          f"charges reach the API and the write-up", flush=True)
+
+    # ------------------------------------------------------------------
+    #  density of states
+    # ------------------------------------------------------------------
+    # The projections must add up to the total.  They do by construction,
+    # because the weights are Loewdin populations -- using |c|^2 instead
+    # (the bug that inverted water's LUMO) breaks the partition.
+    nbad = 0
+    code, resp = _req("POST", "/api/job", {"molecule": "pyridine",
+                                           "kind": "dos",
+                                           "functional": "b3lyp",
+                                           "basis": "6-31g*"})
+    if code == 200 and isinstance(resp, dict) and resp.get("job_id"):
+        job = _wait(resp["job_id"])
+        d = (job.get("result") or {}).get("dos") or {}
+        total = d.get("total") or []
+        proj = d.get("projected") or {}
+        if not total or not proj:
+            fail.append("dos/pyridine: empty total or projected curve")
+            nbad += 1
+        else:
+            if len(proj) < 2:
+                fail.append(
+                    f"dos/pyridine: {len(proj)} projection(s), pyridine has "
+                    f"three elements")
+                nbad += 1
+            acc = [0.0] * len(total)
+            for curve in proj.values():
+                for i, v in enumerate(curve):
+                    acc[i] += v
+            peak = max(abs(v) for v in total) or 1.0
+            worst = max(abs(a - b) for a, b in zip(acc, total)) / peak
+            if worst > 0.005:
+                fail.append(
+                    f"dos/pyridine: projections miss the total by "
+                    f"{worst * 100:.2f}% of the peak -- not a partition")
+                nbad += 1
+            if not (d.get("homo_ev") < d.get("lumo_ev", float("inf"))):
+                fail.append("dos/pyridine: HOMO above LUMO")
+                nbad += 1
+    else:
+        fail.append("dos: job did not run")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] DOS projections partition the total",
+          flush=True)
+
+    # ------------------------------------------------------------------
+    #  the DOS is a density, so its area has to be a number of states
+    # ------------------------------------------------------------------
+    # Being a partition is not enough.  A curve whose area depends on how much
+    # it was smoothed is not a density of states: it is a drawing whose height
+    # is set by a parameter nobody reports.  Unnormalised Gaussians gave water
+    # an area of 5.4 at FWHM 0.3 eV and 19.0 at 1.0 eV -- the same molecule,
+    # 3.3x apart -- and the occupied region integrated to 2.5 states instead
+    # of 5.  Two integrals pin it down: the whole curve must hold every
+    # orbital, and everything below the HOMO must hold the occupied ones
+    # (within one state, because the HOMO's own Gaussian straddles the line
+    # and a degenerate HOMO straddles it twice).
+    nbad = 0
+    for mol_name in ("water", "pyridine"):
+        code, resp = _req("POST", "/api/job", {"molecule": mol_name,
+                                               "kind": "dos",
+                                               "functional": "b3lyp",
+                                               "basis": "6-31g*"})
+        if code != 200 or not isinstance(resp, dict) or not resp.get("job_id"):
+            fail.append(f"dos/{mol_name}: job did not run")
+            nbad += 1
+            continue
+        d = ((_wait(resp["job_id"]).get("result") or {}).get("dos")) or {}
+        xs, ys = d.get("x_energy_ev") or [], d.get("total") or []
+        nmo, nocc = d.get("n_orbitals"), d.get("n_occupied")
+        if not xs or not ys or len(xs) != len(ys):
+            fail.append(f"dos/{mol_name}: no DOS curve returned")
+            nbad += 1
+            continue
+        if nmo is None or nocc is None:
+            fail.append(
+                f"dos/{mol_name}: the payload does not say how many orbitals "
+                f"it broadened, so its area cannot be checked")
+            nbad += 1
+            continue
+        area = 0.0
+        occ_area = 0.0
+        homo = d.get("homo_ev")
+        for i in range(len(xs) - 1):
+            dx = xs[i + 1] - xs[i]
+            trap = 0.5 * (ys[i] + ys[i + 1]) * dx
+            area += trap
+            if homo is not None and xs[i + 1] <= homo:
+                occ_area += trap
+        if abs(area - nmo) > 0.02 * nmo:
+            fail.append(
+                f"dos/{mol_name}: the whole curve integrates to {area:.2f} but "
+                f"there are {nmo} orbitals -- the broadening is not "
+                f"normalised, so the y axis is arbitrary")
+            nbad += 1
+        # The lower bound is loose because a degenerate HOMO straddles the
+        # line once per partner (water 4.5 of 5, benzene's twofold HOMO 20 of
+        # 21); the unnormalised curve gave 2.5 of 5, so the window still
+        # catches it by a wide margin.
+        if not (nocc - 2.05 <= occ_area <= nocc + 0.05):
+            fail.append(
+                f"dos/{mol_name}: the occupied part integrates to "
+                f"{occ_area:.2f} states, but {nocc} orbitals are occupied")
+            nbad += 1
+        if "states/eV" not in (d.get("ylabel") or ""):
+            fail.append(
+                f"dos/{mol_name}: the y axis is labelled "
+                f"'{d.get('ylabel')}' with no unit; a density of states "
+                f"counts states per eV")
+            nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] the DOS is a normalised density: "
+          f"its area is a number of states", flush=True)
+
+    # ------------------------------------------------------------------
+    #  reactivity descriptors
+    # ------------------------------------------------------------------
+    # Condensed Fukui functions are differences of *population*, so every
+    # value must be non-negative and the set must sum to one.  Computing
+    # them from charges (Z - population) flips every sign and used to put
+    # formaldehyde's most electrophilic site on a hydrogen.
+    nbad = 0
+    code, resp = _req("POST", "/api/job", {"molecule": "formaldehyde",
+                                           "kind": "reactivity",
+                                           "functional": "b3lyp",
+                                           "basis": "6-31g*"})
+    if code == 200 and isinstance(resp, dict) and resp.get("job_id"):
+        job = _wait(resp["job_id"])
+        rres = job.get("result") or {}
+        fk = rres.get("fukui") or {}
+        rows = fk.get("rows") or []
+        if not rows:
+            fail.append("reactivity/formaldehyde: no Fukui rows")
+            nbad += 1
+        else:
+            for key in ("f_plus", "f_minus"):
+                worst = min(r.get(key, 0.0) for r in rows)
+                if worst < -0.05:
+                    fail.append(
+                        f"reactivity/formaldehyde: {key} reaches {worst:.3f}; "
+                        f"condensed Fukui values cannot be negative (signs "
+                        f"are inverted if charges were used)")
+                    nbad += 1
+                tot = sum(r.get(key, 0.0) for r in rows)
+                if abs(tot - 1.0) > 0.05:
+                    fail.append(
+                        f"reactivity/formaldehyde: {key} sums to {tot:.4f}, "
+                        f"must sum to 1")
+                    nbad += 1
+            # the chemical pay-off: a carbonyl is attacked by nucleophiles at
+            # carbon and by electrophiles at oxygen.
+            site = fk.get("most_electrophilic_site")
+            if site != "O2":
+                fail.append(
+                    f"reactivity/formaldehyde: most electrophilic site is "
+                    f"{site}, expected O2 (the carbonyl oxygen)")
+                nbad += 1
+        if not ((rres.get("gap_ev") or 0) > 0):
+            fail.append("reactivity/formaldehyde: non-positive gap")
+            nbad += 1
+    else:
+        fail.append("reactivity: job did not run")
+        nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] Fukui functions sum to one and "
+          f"point at the right atom", flush=True)
+
+    # ------------------------------------------------------------------
+    #  surface grids
+    # ------------------------------------------------------------------
+    # The map has to survive three independent checks.  The grid itself is
+    # audited like any cube file (header vs payload).  The physics is audited
+    # against the one molecule whose electrostatic potential is not up for
+    # debate: water is negative at oxygen and positive at hydrogen, and
+    # formaldehyde is negative at the carbonyl oxygen and positive at the
+    # carbonyl carbon -- the same answer the Fukui functions give by a
+    # completely different route.  And the ions audit the *sign*: an anion's
+    # potential is negative everywhere in the shell and a cation's positive
+    # everywhere, so a narration that reports "the most positive region" for
+    # hydroxide is describing a number that is still negative.
+    nbad = 0
+    for molecule, rich_sym, poor_sym in (("water", "O", "H"),
+                                         ("formaldehyde", "O", "C")):
+        code, resp = _req("POST", "/api/job", {"molecule": molecule,
+                                               "kind": "surfaces",
+                                               "functional": "b3lyp",
+                                               "basis": "6-31g*"})
+        if code != 200 or not isinstance(resp, dict) or not resp.get("job_id"):
+            fail.append(f"surfaces/{molecule}: job did not start")
+            nbad += 1
+            continue
+        job = _wait(resp["job_id"])
+        sres = job.get("result") or {}
+        s = sres.get("surfaces") or {}
+        items = s.get("surfaces") or []
+        if not items:
+            fail.append(f"surfaces/{molecule}: no grids produced")
+            nbad += 1
+            continue
+
+        mep = next((i for i in items if i.get("kind") == "mep"), None)
+        if not mep:
+            fail.append(f"surfaces/{molecule}: no MEP grid")
+            nbad += 1
+        else:
+            rng = mep.get("range") or []
+            if len(rng) != 2 or abs(rng[0] + rng[1]) > 1e-9 or rng[1] <= 0:
+                fail.append(
+                    f"surfaces/{molecule}: MEP range {rng} is not symmetric "
+                    f"about zero")
+                nbad += 1
+            neg = mep.get("most_negative") or {}
+            pos = mep.get("most_positive") or {}
+            for role, got, want, sign in (
+                    ("negative", neg, rich_sym, -1),
+                    ("positive", pos, poor_sym, +1)):
+                site = got.get("site") or ""
+                val = got.get("value_hartree")
+                if not site.startswith(want):
+                    fail.append(
+                        f"surfaces/{molecule}: most {role} site is {site!r}, "
+                        f"expected an atom starting with {want!r}")
+                    nbad += 1
+                if val is None or (val * sign) <= 0:
+                    fail.append(
+                        f"surfaces/{molecule}: most {role} site {site} has "
+                        f"potential {val} Ha/e, wrong sign")
+                    nbad += 1
+            if not mep.get("potential_changes_sign"):
+                fail.append(
+                    f"surfaces/{molecule}: a neutral polar molecule must "
+                    f"show both signs of potential")
+                nbad += 1
+
+        # The legend and the prose must describe the same numbers.  An
+        # earlier sampling scheme read percentiles over the whole grid box
+        # and reported extremes from the same grid, and the two disagreed by
+        # a factor of six (naphthalene: range +/-15 kcal/mol, extreme 89).
+        if mep:
+            rng = mep.get("range") or []
+            for role in ("most_negative", "most_positive"):
+                val = (mep.get(role) or {}).get("value_hartree")
+                if val is None or len(rng) != 2:
+                    continue
+                if not (rng[0] - 1e-9 <= val <= rng[1] + 1e-9):
+                    fail.append(
+                        f"surfaces/{molecule}: {role} = {val} Ha/e lies "
+                        f"outside the displayed colour range {rng} -- the "
+                        f"legend and the text disagree")
+                    nbad += 1
+
+        if not any(i.get("kind") == "orbital" for i in items):
+            fail.append(f"surfaces/{molecule}: no orbital grids")
+            nbad += 1
+
+        # the grids must actually be served, and be well-formed cubes
+        base = s.get("url_base") or ""
+        if not base.startswith("/api/cubes/"):
+            fail.append(f"surfaces/{molecule}: bad url_base {base!r}")
+            nbad += 1
+        else:
+            import urllib.request as _url
+            for it in items:
+                try:
+                    with _url.urlopen(BASE + base + "/" + it["file"],
+                                      timeout=120) as fh:
+                        text = fh.read().decode("utf-8", "replace")
+                except Exception as exc:
+                    fail.append(
+                        f"surfaces/{molecule}: {it['file']} -> {exc}")
+                    nbad += 1
+                    continue
+                lines = text.splitlines()
+                if len(lines) < 8:
+                    fail.append(
+                        f"surfaces/{molecule}: {it['file']} has {len(lines)} "
+                        f"lines, not a cube file")
+                    nbad += 1
+                    continue
+                try:
+                    natoms = int(lines[2].split()[0])
+                    dims = [abs(int(lines[3 + a].split()[0])) for a in range(3)]
+                except (ValueError, IndexError):
+                    fail.append(
+                        f"surfaces/{molecule}: {it['file']} unreadable header")
+                    nbad += 1
+                    continue
+                if natoms <= 0:
+                    # 3Dmol only applies the bohr -> angstrom factor when the
+                    # atom count is positive; a negative one would render the
+                    # grid 1.89x too large.
+                    fail.append(
+                        f"surfaces/{molecule}: {it['file']} declares natoms "
+                        f"{natoms}; must be positive (bohr convention)")
+                    nbad += 1
+                vals = " ".join(lines[6 + natoms:]).split()
+                if len(vals) != dims[0] * dims[1] * dims[2]:
+                    fail.append(
+                        f"surfaces/{molecule}: {it['file']} header says "
+                        f"{dims[0]}x{dims[1]}x{dims[2]} = "
+                        f"{dims[0] * dims[1] * dims[2]} values but "
+                        f"{len(vals)} were read")
+                    nbad += 1
+    # Ions: the potential cannot change sign, and the narration must not
+    # call the least-negative point of an anion "the most positive region".
+    for molecule, want_sign in (("hydroxide", -1), ("ammonium", +1)):
+        code, resp = _req("POST", "/api/job", {"molecule": molecule,
+                                               "kind": "surfaces",
+                                               "functional": "b3lyp",
+                                               "basis": "6-31g*"})
+        if code != 200 or not isinstance(resp, dict) or not resp.get("job_id"):
+            fail.append(f"surfaces/{molecule}: job did not start")
+            nbad += 1
+            continue
+        job = _wait(resp["job_id"])
+        s = (job.get("result") or {}).get("surfaces") or {}
+        mep = next((i for i in (s.get("surfaces") or [])
+                    if i.get("kind") == "mep"), None)
+        if not mep:
+            fail.append(f"surfaces/{molecule}: no MEP grid")
+            nbad += 1
+            continue
+        if mep.get("potential_changes_sign"):
+            fail.append(
+                f"surfaces/{molecule}: an ion's potential must keep one sign "
+                f"on the accessible surface, but it was reported as changing")
+            nbad += 1
+        neg = (mep.get("most_negative") or {}).get("value_hartree")
+        pos = (mep.get("most_positive") or {}).get("value_hartree")
+        for role, val in (("most_negative", neg), ("most_positive", pos)):
+            if val is None:
+                fail.append(f"surfaces/{molecule}: {role} missing")
+                nbad += 1
+            elif (val * want_sign) <= 0:
+                fail.append(
+                    f"surfaces/{molecule}: {role} = {val} Ha/e, but a "
+                    f"{'anion' if want_sign < 0 else 'cation'} must have "
+                    f"that sign everywhere on its surface")
+                nbad += 1
+        # Assert the claim that is actually correct, rather than merely
+        # banning a phrase: for an ion the text has to say the potential
+        # keeps one sign and draw the consequence.
+        text = job.get("explanation") or ""
+        want_word = "negative" if want_sign < 0 else "positive"
+        # note where the emphasis markers sit in the source sentence:
+        #   "The potential stays **negative everywhere** on the ..."
+        if f"stays **{want_word} everywhere**" not in text:
+            fail.append(
+                f"surfaces/{molecule}: the narration does not say the "
+                f"potential stays {want_word} everywhere -- it must, because "
+                f"no part of an ion's accessible surface has the other sign")
+            nbad += 1
+        if "no electron-rich face" not in text:
+            fail.append(
+                f"surfaces/{molecule}: the narration implies the ion "
+                f"presents both an electron-rich and an electron-poor face")
+            nbad += 1
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] surface grids are well-formed "
+          f"and put the charge where chemistry says", flush=True)
+
+    # ------------------------------------------------------------------
+    # NCI: the reduced density gradient has to find a hydrogen bond in a
+    # water dimer and must not invent one in methane.
+    #
+    # This is the whole point of the analysis, so the gate asserts the
+    # physical claim rather than the shape of the payload: an interaction
+    # appears as a cluster of grid points where the density is an order of
+    # magnitude below a covalent bond yet the gradient nearly vanishes.
+    # A monomer has no such place, so if both systems "find" a spike the
+    # descriptor is broken -- and so is the figure drawn from it.
+    # ------------------------------------------------------------------
+    nbad = 0
+    nci_seen = {}
+    for molecule, want in (("water_dimer", True), ("methane", False)):
+        code, resp = _req("POST", "/api/job", {"molecule": molecule,
+                                               "kind": "nci",
+                                               "functional": "b3lyp",
+                                               "basis": "6-31g*"})
+        if code != 200 or not isinstance(resp, dict) or not resp.get("job_id"):
+            fail.append(f"nci/{molecule}: job did not start")
+            nbad += 1
+            continue
+        job = _wait(resp["job_id"])
+        d = (job.get("result") or {}).get("nci") or {}
+        if not d:
+            fail.append(f"nci/{molecule}: no nci block in the result")
+            nbad += 1
+            continue
+        nci_seen[molecule] = d
+
+        sc = d.get("scatter") or {}
+        series = {s.get("key"): s for s in (sc.get("series") or [])}
+        if set(series) != {"attractive", "vdw", "repulsive"}:
+            fail.append(
+                f"nci/{molecule}: scatter series are {sorted(series)}, "
+                f"expected attractive/vdw/repulsive")
+            nbad += 1
+
+        plotted = 0
+        for key, s in series.items():
+            pts = s.get("points") or []
+            plotted += len(pts)
+            if not pts:
+                fail.append(f"nci/{molecule}: series {key} is empty")
+                nbad += 1
+                continue
+            for pt in pts:
+                x, y = pt[0], pt[1]
+                if not (isinstance(x, (int, float))
+                        and isinstance(y, (int, float))
+                        and math.isfinite(x) and math.isfinite(y)):
+                    fail.append(
+                        f"nci/{molecule}: series {key} has a non-finite "
+                        f"point {pt!r}")
+                    nbad += 1
+                    break
+                if y < -1e-9:
+                    fail.append(
+                        f"nci/{molecule}: RDG {y} is negative -- the reduced "
+                        f"density gradient is a magnitude and cannot be")
+                    nbad += 1
+                    break
+                if abs(x) > 0.0500001:
+                    fail.append(
+                        f"nci/{molecule}: sign(l2)rho {x} lies outside the "
+                        f"plotted range +/-0.05")
+                    nbad += 1
+                    break
+        if plotted < 30:
+            fail.append(
+                f"nci/{molecule}: only {plotted} points plotted, too few for "
+                f"the figure to show anything")
+            nbad += 1
+
+        got = bool(d.get("has_weak_interaction"))
+        if got != want:
+            fail.append(
+                f"nci/{molecule}: has_weak_interaction={got}, expected "
+                f"{want} ({d.get('n_spike_points')} spike points, lowest RDG "
+                f"{d.get('min_rdg')})")
+            nbad += 1
+
+        if want:
+            # Where the spike sits is not free: a hydrogen bond lands at a
+            # density far below a covalent bond, and on the attractive side.
+            at = d.get("sign_l2_rho_at_spike")
+            rdg = d.get("min_rdg")
+            if at is None or not (-0.05 < at < -0.005):
+                fail.append(
+                    f"nci/{molecule}: the spike sits at sign(l2)rho={at}, "
+                    f"which is not a weakly attractive density "
+                    f"(expected between -0.05 and -0.005)")
+                nbad += 1
+            if rdg is None or not (0.0 < rdg < 0.35):
+                fail.append(
+                    f"nci/{molecule}: lowest RDG is {rdg}, too high for a "
+                    f"non-covalent contact (expected below 0.35)")
+                nbad += 1
+            text = job.get("explanation") or ""
+            if "weak-interaction spike" not in text:
+                fail.append(
+                    f"nci/{molecule}: the narration does not report the "
+                    f"spike that the data contains")
+                nbad += 1
+        else:
+            text = job.get("explanation") or ""
+            if "No weak-interaction spike was found" not in text:
+                fail.append(
+                    f"nci/{molecule}: the narration must say plainly that no "
+                    f"spike was found instead of hinting at one")
+                nbad += 1
+
+        # grids served and well-formed, same rules as any other cube
+        base = d.get("url_base") or ""
+        if not base.startswith("/api/cubes/"):
+            fail.append(f"nci/{molecule}: bad url_base {base!r}")
+            nbad += 1
+        else:
+            import urllib.request as _url
+            for it in (d.get("surfaces") or []):
+                try:
+                    with _url.urlopen(BASE + base + "/" + it["file"],
+                                      timeout=180) as fh:
+                        text = fh.read().decode("utf-8", "replace")
+                except Exception as exc:
+                    fail.append(f"nci/{molecule}: {it['file']} -> {exc}")
+                    nbad += 1
+                    continue
+                lines = text.splitlines()
+                try:
+                    natoms = int(lines[2].split()[0])
+                    dims = [abs(int(lines[3 + a].split()[0])) for a in range(3)]
+                except (ValueError, IndexError):
+                    fail.append(
+                        f"nci/{molecule}: {it['file']} unreadable header")
+                    nbad += 1
+                    continue
+                if natoms <= 0:
+                    fail.append(
+                        f"nci/{molecule}: {it['file']} declares natoms "
+                        f"{natoms}; must be positive (bohr convention)")
+                    nbad += 1
+                vals = " ".join(lines[6 + natoms:]).split()
+                if len(vals) != dims[0] * dims[1] * dims[2]:
+                    fail.append(
+                        f"nci/{molecule}: {it['file']} header says "
+                        f"{dims[0] * dims[1] * dims[2]} values but "
+                        f"{len(vals)} were read")
+                    nbad += 1
+
+    # The two cases must actually differ, not merely each pass its own test:
+    # a descriptor that reports the same number everywhere would satisfy
+    # both assertions above only if the thresholds were slack.
+    if "water_dimer" in nci_seen and "methane" in nci_seen:
+        a = nci_seen["water_dimer"].get("min_rdg")
+        b = nci_seen["methane"].get("min_rdg")
+        if a is not None and b is not None and not (b > 2.0 * a):
+            fail.append(
+                f"nci: the dimer ({a:.3f}) and methane ({b:.3f}) reach "
+                f"similar lowest RDG -- the descriptor does not separate a "
+                f"hydrogen bond from no interaction at all")
+            nbad += 1
+
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] NCI finds the hydrogen bond "
+          f"in a water dimer and none in methane", flush=True)
+
+    # ------------------------------------------------------------------
+    #  automatic design
+    # ------------------------------------------------------------------
+    # `renderDesign` and `designCard` read every one of these fields.  A
+    # missing one does not raise -- it renders as `undefined` in the panel,
+    # which is exactly the class of bug this audit exists to catch.
+    #
+    # The brief demands a substructure, so the run also proves the promise
+    # the panel makes: every returned molecule really carries what was
+    # asked for.  "design 4 amines" used to come back with molecules that
+    # had none, because the pool-filling loop stopped as soon as any twelve
+    # candidates had survived and a demanded group is rare in a uniform
+    # fragment draw.
+    before = len(FAILURES)
+    code, resp = _req("POST", "/api/design", {
+        "text": "design 3 molecules containing an amine, logP below 3",
+        "n_candidates": 3,
+        "dft_top": 1,
+        "use_model": False,
+    }, timeout=60.0)
+    if code == 200 and isinstance(resp, dict) and resp.get("job_id"):
+        job = _wait(resp["job_id"], timeout=900.0)
+        d = job.get("result") or {}
+        if job.get("status") != "completed":
+            fail.append(f"design: job ended as {job.get('status')}")
+
+        check_present("design", d, [
+            "id", "brief", "candidates", "generated", "rejected", "dft_ran",
+            "dft_cached", "origins", "model_notes", "seconds", "targets",
+            "qualified", "requirements", "unmet_requirements",
+            "rejection_reasons", "quality_checks",
+        ])
+
+        cands = d.get("candidates") or []
+        if not cands:
+            fail.append("design: no candidates returned")
+        for cand in cands:
+            check_present("design.candidate", cand,
+                          ["smiles", "name", "origin", "descriptors", "scoring",
+                           "qualified"])
+            check_present("design.candidate.descriptors",
+                          cand.get("descriptors") or {},
+                          ["formula", "atoms", "heavy_atoms", "values",
+                           "alerts", "alert_count"])
+            check_present("design.candidate.scoring", cand.get("scoring") or {},
+                          ["score", "targets", "blocking", "measured"])
+            for key in ("sa", "qed"):
+                if ((cand.get("descriptors") or {}).get("values")
+                        or {}).get(key) is None:
+                    fail.append(
+                        f"design.candidate/{cand.get('smiles')}: no `{key}` "
+                        "descriptor -- the card would render an empty cell")
+        
+        # the requirement really was enforced on the returned molecules
+        try:
+            from rdkit import Chem
+
+            pattern = Chem.MolFromSmarts("[NX3;H2,H1,H0;!$(N=*)]")
+            offenders = [c["smiles"] for c in cands
+                         if not Chem.MolFromSmiles(c["smiles"])
+                         .HasSubstructMatch(pattern)]
+            if offenders:
+                fail.append(
+                    "design: molecules returned without the demanded amine: "
+                    + ", ".join(offenders[:3]))
+            if d.get("qualified", 0) < len(cands):
+                fail.append(
+                    f"design: qualified={d.get('qualified')} but "
+                    f"{len(cands)} candidates were listed")
+        except ImportError:
+            pass
+
+        # the measured lead must be reported, with its geometry provenance:
+        # the level of theory alone is not reproducible
+        measured = [c for c in cands if c.get("dft")]
+        if not measured:
+            fail.append(
+                "design: dft_top=1 but no candidate carries a `dft` block -- "
+                "the measured number was paid for and then hidden")
+        for cand in measured:
+            check_present("design.candidate.dft", cand["dft"],
+                          ["gap_ev", "homo_ev", "lumo_ev", "dipole",
+                           "functional_label", "basis_label",
+                           "geometry_source", "optimized", "cached"])
+            if not cand["dft"].get("geometry_source"):
+                fail.append(
+                    "design: a measured candidate does not say where its "
+                    "geometry came from")
+
+        # a zero score must be explained, not just displayed as 0 -- either
+        # by naming the criteria that were missed, or by saying that nothing
+        # could be judged yet (a gap-only brief has no score before the SCF)
+        for cand in cands:
+            sc = cand.get("scoring") or {}
+            if sc.get("scored") is False:
+                if not sc.get("unscored_reason"):
+                    fail.append(
+                        f"design.candidate/{cand.get('smiles')}: scored=false "
+                        "with no `unscored_reason` -- the panel would show a "
+                        "bare zero")
+            elif sc.get("score") == 0.0 and not sc.get("blocking"):
+                fail.append(
+                    f"design.candidate/{cand.get('smiles')}: score 0.0 with "
+                    "no `blocking` entry -- the panel would show a zero with "
+                    "no reason")
+    else:
+        fail.append(f"design: job did not run ({code})")
+    # `check_present` appends to FAILURES without returning, so the section's
+    # failure count is whatever it added
+    nbad = len(FAILURES) - before
+    print(f"[{'PASS' if nbad == 0 else 'FAIL'}] design payload is complete and "
+          f"its requirement is enforced", flush=True)
+
+    print()
+    if FAILURES:
+        print(f"=== FAIL: {len(FAILURES)} contract problem(s) ===")
+        for f in FAILURES:
+            print("  -", f)
+        return 1
+    print("=== PASS: every field the front end reads is present ===")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

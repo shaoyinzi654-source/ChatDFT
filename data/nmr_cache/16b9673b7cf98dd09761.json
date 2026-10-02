@@ -1,0 +1,55 @@
+{
+ "format": 2,
+ "key": "dimethyl_selenide",
+ "label": "(CH3)2Se",
+ "formula": "C2H6Se",
+ "geometry": "C-H 1.0900 A x6; C-Se 1.9430 A x2 (the module's experimental geometry)",
+ "geometry_source": "builtin",
+ "geometry_signature": "985a330618c7",
+ "geometry_documented": "Se-C 1.943 A, C-Se-C 96.2 deg (microwave, Beecher 1966), C-H 1.090 A, H-C-Se 109.47 deg",
+ "basis": "6-31g*",
+ "conv_tol": 1e-13,
+ "field_step_au": 0.0003,
+ "natm": 9,
+ "nao": 72,
+ "atoms_per_element": {
+  "Se": 1,
+  "C": 2,
+  "H": 6
+ },
+ "element_shielding_ppm": {
+  "Se": {
+   "sigma_iso_ppm": 2121.1624184272896,
+   "spread_ppm": 0.0,
+   "n_equivalent": 1,
+   "per_atom_ppm": [
+    2121.1624184272896
+   ]
+  },
+  "C": {
+   "sigma_iso_ppm": 188.05440400372254,
+   "spread_ppm": 6.41307451587636e-09,
+   "n_equivalent": 2,
+   "per_atom_ppm": [
+    188.05440400692908,
+    188.054404000516
+   ]
+  },
+  "H": {
+   "sigma_iso_ppm": 31.02069793513837,
+   "spread_ppm": 0.9388339510535637,
+   "n_equivalent": 6,
+   "per_atom_ppm": [
+    30.500957831479695,
+    31.12134419123116,
+    31.43979178253326,
+    30.500957831796452,
+    31.121344191612256,
+    31.43979178217737
+   ]
+  }
+ },
+ "dE_dB_max": 0.0,
+ "tensor_asymmetry_max_ppm": 11.62138204602453,
+ "cached": false
+}

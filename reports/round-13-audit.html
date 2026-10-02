@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChatDFT 审计 · 第 13 轮 — Mayer 键级与 Hirshfeld 电荷</title>
+<style>
+  :root {
+    --ink: #1b1f24; --muted: #5b6570; --line: #e2e6ea; --bg: #ffffff;
+    --soft: #f6f8fa; --warn: #9a5b00; --warnbg: #fdf3e3;
+    --ok: #1a7f37; --okbg: #eaf6ec; --bad: #b42318; --badbg: #fdeceb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.65 -apple-system, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", Roboto, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 28px 80px; }
+  h1 { font-size: 27px; margin: 0 0 6px; letter-spacing: -.2px; }
+  .sub { color: var(--muted); margin: 0 0 34px; font-size: 14px; }
+  h2 { font-size: 19px; margin: 42px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 26px 0 8px; }
+  p { margin: 10px 0; }
+  code { background: var(--soft); padding: 1px 5px; border-radius: 4px;
+    font-family: "SFMono-Regular", Consolas, monospace; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0;
+    font-size: 14px; }
+  th, td { text-align: left; padding: 9px 11px; border: 1px solid var(--line);
+    vertical-align: top; }
+  th { background: var(--soft); font-weight: 600; }
+  td.n { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    white-space: nowrap; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 12px; font-weight: 600; }
+  .t-ok { background: var(--okbg); color: var(--ok); }
+  .t-bad { background: var(--badbg); color: var(--bad); }
+  .note { background: var(--warnbg); border-left: 3px solid #f0c99a;
+    padding: 10px 14px; margin: 16px 0; font-size: 14px; }
+  .quote { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    background: var(--soft); padding: 10px 12px; border-radius: 6px;
+    overflow-x: auto; margin: 10px 0; color: #333; }
+  ul { padding-left: 22px; } li { margin: 5px 0; }
+  .kpi { display: flex; gap: 14px; flex-wrap: wrap; margin: 18px 0 4px; }
+  .kpi div { flex: 1 1 150px; border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 14px; background: var(--soft); }
+  .kpi b { display: block; font-size: 21px; }
+  .kpi span { font-size: 12.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>第 13 轮：Mayer 键级与 Hirshfeld 电荷</h1>
+<p class="sub">两张论文里最常见的表。两种 Mayer 约定差 2 倍，而 Hirshfeld 的自由原子
+必须做球平均——不做的话，水分子里两个化学等价的氢会拿到不同的电荷。</p>
+
+<div class="kpi">
+  <div><b>2×</b><span>两种 Mayer 约定之差</span></div>
+  <div><b>790×</b><span>球平均 vs 不平均的旋转漂移</span></div>
+  <div><b>35 → 39</b><span>contract 检查段（+12 条断言）</span></div>
+  <div><b>7</b><span>本轮我自己的错误</span></div>
+</div>
+
+<h2>新增功能</h2>
+<ul>
+  <li><strong>Mayer 键级</strong>：由密度矩阵直接得到，零额外 SCF。给出每根键的键级、
+      每个原子的 Mayer 价、总键级。</li>
+  <li><strong>Hirshfeld 电荷</strong>：用与分子同一基组的<strong>球平均基态自由原子</strong>
+      密度做权重。这是三种划分里唯一适合写进论文的——加极化函数后它只动千分之几个电子，
+      Mulliken 会动零点几个。</li>
+  <li>Properties 面板新增键级表（带条形图）与第三根电荷条；叙述里引用电荷和与密度积分
+      作为可信度证据。</li>
+</ul>
+
+<h2>第一步：先判定 Mayer 约定，再写代码</h2>
+<p>Mayer 键级有两个都在流通的定义，闭壳层分子上差<strong>恰好 2 倍</strong>：</p>
+<div class="quote">自旋分辨：B_AB = Σ_{μ∈A,ν∈B} [ (PαS)_{μν}(PαS)_{νμ} + (PβS)_{μν}(PβS)_{νμ} ]
+总密度：  B_AB = Σ_{μ∈A,ν∈B} (PS)_{μν}(PS)_{νμ}          P = Pα + Pβ</div>
+<p>两者都"看起来合理"，而差别只是每条键除以 2——没有文献对照就发现不了。
+用 B3LYP/6-31G* 实测：</p>
+<table>
+  <tr><th>分子</th><th>键</th><th>总密度约定</th><th>自旋分辨</th>
+      <th>文献值</th><th></th></tr>
+  <tr><td>N₂</td><td class="n">N–N</td><td class="n">2.829</td>
+      <td class="n">1.414</td><td class="n">~2.83</td>
+      <td><span class="tag t-ok">总密度</span></td></tr>
+  <tr><td>CO</td><td class="n">C–O</td><td class="n">2.419</td>
+      <td class="n">1.210</td><td class="n">~2.40</td>
+      <td><span class="tag t-ok">总密度</span></td></tr>
+  <tr><td>水</td><td class="n">O–H</td><td class="n">0.807</td>
+      <td class="n">0.403</td><td class="n">~0.80</td>
+      <td><span class="tag t-ok">总密度</span></td></tr>
+  <tr><td>甲烷</td><td class="n">C–H</td><td class="n">0.964</td>
+      <td class="n">0.482</td><td class="n">~0.97</td>
+      <td><span class="tag t-ok">总密度</span></td></tr>
+  <tr><td>苯</td><td class="n">C–C</td><td class="n">1.456</td>
+      <td class="n">0.728</td><td class="n">~1.45</td>
+      <td><span class="tag t-ok">总密度</span></td></tr>
+</table>
+
+<h2>第二步：Hirshfeld 的自由原子必须球平均</h2>
+<p>Hirshfeld 权重是 <code>w_A = ρ_A^free / Σ_B ρ_B^free</code>。第一周期原子
+<strong>全都是开壳层</strong>（C 是 ³P，N 是 ⁴S，O 是 ³P），所以未经球平均的自由原子
+密度是<strong>各向异性</strong>的。后果不是"稍微不准"，而是<strong>化学等价的原子拿到
+不同的电荷</strong>：</p>
+<table>
+  <tr><th>水的 Hirshfeld 电荷</th><th>O</th><th>H(2)</th><th>H(3)</th>
+      <th>刚性旋转 37° 后最大漂移</th></tr>
+  <tr><td>球平均（本实现）</td><td class="n">−0.31792</td>
+      <td class="n">+0.15896</td><td class="n">+0.15896</td>
+      <td class="n">3.0×10⁻⁵ <span class="tag t-ok">OK</span></td></tr>
+  <tr><td>不平均（朴素写法）</td><td class="n">−0.29149</td>
+      <td class="n">+0.15821</td><td class="n">+0.13328</td>
+      <td class="n">2.37×10⁻² <span class="tag t-bad">790×</span></td></tr>
+</table>
+<p>两个氢相差 <strong>0.025 e</strong>——在一张论文表里这足以被解释成"两个氢环境不同"，
+而它们其实完全等价。</p>
+
+<div class="note"><strong>这条守卫差点变成无效守卫。</strong>我的实现按构造就强制径向剖面，
+所以"旋转不变性"这条测试对它<strong>永远会通过</strong>——它测不出球平均有没有做。
+要让它有意义，必须把朴素实现写出来当对照，并证明对照<strong>会失败</strong>。
+上面右列就是这个对照。没有它，这条测试只是装饰。</div>
+
+<h2>不需要文献值的守卫</h2>
+<table>
+  <tr><th>断言</th><th>实测</th><th>为什么它不能被"调参"满足</th></tr>
+  <tr><td>电荷和 = 分子总电荷</td>
+      <td class="n">水 0.0 / 铵 +0.99996</td>
+      <td>代数上恒等，偏差只来自网格求积（4×10⁻⁵ e）</td></tr>
+  <tr><td>权重和 = 1（逐格点）</td>
+      <td class="n">偏差 &lt; 10⁻¹⁵</td>
+      <td>Σ_A ρ_A = ρ_pro 是定义，不是拟合</td></tr>
+  <tr><td>密度在网格上积分 = 电子数</td>
+      <td class="n">10.00000 / 10.00003</td>
+      <td>密度算错时这条立刻塌</td></tr>
+  <tr><td>等价原子必须等价</td>
+      <td class="n">两个 H 差 0.0</td>
+      <td>对称性，与基组和泛函无关</td></tr>
+  <tr><td>Hirshfeld 比 Mulliken 稳</td>
+      <td class="n">0.0026 vs 0.1865</td>
+      <td>6-31G* → 6-31G** 的实际移动量</td></tr>
+  <tr><td>甲基自由基三条 C–H 全等</td>
+      <td class="n">0.9478 ×3，碳价 2.843</td>
+      <td>开壳层路径同样受检</td></tr>
+</table>
+
+<h2>本轮我犯的七个错</h2>
+<p>这一轮值得单独记下来的是：<strong>大部分时间花在修我自己的东西上</strong>，
+而每一条都是闸门抓到的，不是我读代码读出来的。</p>
+
+<h3>1. 转置写错，N₂ 从 2.83 变成 2.04</h3>
+<p>正确的求和是 <code>Σ M[ra,rb][μ,ν] · M[rb,ra][ν,μ]</code>。我写成了
+<code>blk * blk.T</code>——对<strong>方形块</strong>（N₂ 的两个氮 AO 数相同）它不报错，
+只是给出一个错误的数：<strong>2.041</strong>。既不是 2.829 也不是 1.414，是一个
+<strong>看起来还挺像键级</strong>的数。对水则直接崩溃（O 的 14 个 AO 对 H 的 2 个，
+形状不匹配）。</p>
+<div class="quote">ValueError: operands could not be broadcast together with shapes (14,2) (2,14)</div>
+<p>要不是拿 N₂/CO 的文献值做了对照，2.041 会被当成"合理的部分双键"收下。</p>
+
+<h3>2. <code>eval_rho</code> 在这个构建里根本不能用</h3>
+<p>PySCF 的 <code>numint.eval_ao</code> 在这里返回 <code>(N, nao)</code>
+（文档也这么写），而 <code>eval_rho</code> 内部按 <code>(nao, N)</code> 处理：</p>
+<div class="quote">AssertionError  (numint.py:711, lib.dot(dm.T, ao.T))</div>
+<p>项目里 <code>fields.py</code> 早就不用 numint，而是走 <code>mol.eval_gto</code>。
+新模块改为复用同一个 <code>density_and_gradient</code>——顺带保证"场的图"和
+"电荷表"不会对密度是什么产生分歧。</p>
+
+<h3>3. 断言了一个我自己写错的诊断量</h3>
+<p>铵离子那条报 <code>weight_sum_fraction = 0.144295</code>，看起来像"权重不是单位划分"。
+但电荷和 0.99996 是对的。原因：<code>Σ_A w_A = 1</code> 只在<strong>有密度的格点</strong>上
+成立，而 86% 的网格权重落在分子外（那里 ρ_pro &lt; 10⁻¹²）。我断言的量从一开始就选错了。
+改成断言<strong>逐格点偏差</strong>（&lt;10⁻⁹）后才成立。</p>
+
+<h3>4. 字段名写错：<code>narration</code> vs <code>explanation</code></h3>
+<p>"叙述必须提到键级"这条检查报失败，但叙述其实是好的——作业对象里的字段叫
+<code>explanation</code>。<strong>一个检查因为读错字段而失败，和一个功能因为没实现而失败，
+在输出里长得一模一样。</strong>修的是测试，不是功能。</p>
+
+<h3>5. 每步 SCF 都跑一次成键分析</h3>
+<p>第一版把分析放进 <code>_harvest</code>，于是<strong>每一次</strong> SCF 都会做一遍——
+包括偶极导数循环（6N 个位移点）、键扫描的几十个点、几何优化的每一步。改成
+<code>DFTEngine(bonding=True)</code> 显式开启，只有填充 Properties 面板的两条路径
+（单点、几何优化）付这个代价。</p>
+
+<h3>6. 自由原子的 SCF 想写检查点文件</h3>
+<div class="quote">PermissionError: [Errno 13] unable to open file: '...\Temp\tmp0wwv5n48'</div>
+<p>一次性原子不需要检查点；<code>mol.chkfile = mf.chkfile = None</code> 之后正常。</p>
+
+<h3>7. 新加的 DOM id 和已有 id 撞了（唯一一个真实产品缺陷）</h3>
+<p>键级表我起名 <code>id="bondTable"</code>——但 Geometry 面板 300 行之下<strong>已经</strong>
+有这个名字，装的是感知出来的键列表。不会报任何错：
+<code>$('#bondTable')</code> 返回文档里<strong>第一个</strong>匹配，于是新表会渲染到
+另一个面板里，并覆盖掉由另一条代码路径填充的列表。</p>
+<p>抓到它的是项目自带的 <code>check_selectors</code>——它的职责就是把 app.js 里每一个
+选择器对着 index.html 解析一遍，其中包含重复 id 检查：</p>
+<div class="quote">DUPLICATE ids: ['bondTable']
+=== FAIL ===
+ - duplicate ids in index.html: ['bondTable']
+
+check_selectors  FAIL (exit 1)   0 checks     &lt;-- 套件记 9/10</div>
+<p>而且闸门运行器把"非零退出且没有任何判定行"判为失败，所以一个还没打印就死掉的闸门
+不会被当成通过。改名 <code>mayerTable</code> 后复跑：<code>DUPLICATE ids: none</code>。</p>
+<p>教训：在单页应用里加 DOM id 之前先 grep 一遍；名字要按功能限定
+（<code>mayerTable</code>）而不是通用（<code>bondTable</code>），因为通用名会撞。</p>
+
+<h2>结果</h2>
+<div class="quote">  check_selectors  PASS   1 checks
+  check_library    PASS  63 checks
+  agent.designer   PASS  97 checks
+  contract         PASS  39 checks
+  selftest         PASS  10 checks
+  sweep            PASS  76 checks
+  check_series     PASS  16 checks
+  check_fields     PASS  13 checks
+  check_nto        PASS  14 checks
+  check_reaction   PASS  52 checks
+
+  10/10 gates passed
+
+  browser_design  (25 passed, 0 failed)
+  browser_series  (12 passed, 0 failed)
+  browser_scan    (12 passed, 0 failed)
+  3/3 gates passed</div>
+<p>主套件 21m52s + 浏览器 5m24s = 27m16s。第一次跑是 9/10
+（<code>check_selectors</code> 抓到上面第 7 条），修好后复跑才是 10/10。</p>
+
+<h2>仍待处理</h2>
+<ul>
+  <li><strong>NMR 化学位移</strong>与<strong>拉曼谱</strong>：这个 PySCF 构建里
+      <code>pyscf.prop</code> 整个子包不存在。NMR 需要 GIAO，拉曼需要极化率对简正坐标的
+      导数（可以用有限场 + 有限差分实现，代价约 36N 次 SCF）。两者都得从零写。</li>
+  <li>ESP / MK 电荷（拟合到网格点）——比 Hirshfeld 更常用于力场参数化。</li>
+  <li>def2 / cc-pVDZ 没有 CCCBDB 频率校正因子，目前明确标注为未校正。</li>
+  <li><code>vibrations</code> / <code>dos</code> 面板的自动切换只有静态检查，
+      没有浏览器闸门。</li>
+  <li>仓库清理：<code>data/nci_test</code>（~30 MB）、<code>build/</code> +
+      <code>tools/</code>（~2 GB）、<code>data/designs</code> 里 44 个过期文件。</li>
+</ul>
+
+</main>
+</body>
+</html>

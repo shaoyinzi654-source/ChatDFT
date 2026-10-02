@@ -1,0 +1,212 @@
+{
+ "id": "7d68a97b03",
+ "brief": {
+  "text": "x",
+  "goal": "",
+  "n_candidates": 3,
+  "generations": 1,
+  "dft_top": 0,
+  "max_atoms": 30,
+  "min_atoms": 3,
+  "max_molwt": null,
+  "min_molwt": null,
+  "max_logp": null,
+  "min_logp": null,
+  "allowed_elements": null,
+  "forbidden_elements": [],
+  "required_smarts": [],
+  "forbidden_smarts": [],
+  "seeds": [],
+  "functional": "b3lyp",
+  "basis": "6-31g*",
+  "notes": [],
+  "has_numeric": false,
+  "alert_filter": "none",
+  "optimize_leads": false,
+  "targets": [
+   {
+    "key": "logp",
+    "aim": "max",
+    "weight": 1.0,
+    "low": null,
+    "high": null,
+    "value": null,
+    "label": "logP (lipophilicity)"
+   }
+  ]
+ },
+ "candidates": [
+  {
+   "smiles": "c1ccc2ccccc2c1",
+   "name": "Naphthalene",
+   "rationale": "",
+   "origin": "seed",
+   "descriptors": {
+    "formula": "C10H8",
+    "atoms": 10,
+    "heavy_atoms": 10,
+    "values": {
+     "molwt": 128.2,
+     "logp": 2.84,
+     "tpsa": 0.0,
+     "hbd": 0.0,
+     "hba": 0.0,
+     "rotb": 0.0,
+     "rings": 2.0,
+     "arom_rings": 2.0,
+     "fsp3": 0.0,
+     "heavy": 10.0,
+     "mr": 43.95,
+     "sa": 1.0,
+     "qed": 0.511
+    },
+    "alerts": {},
+    "alert_count": 0
+   },
+   "dft": null,
+   "scoring": {
+    "score": 0.768,
+    "targets": [
+     {
+      "key": "logp",
+      "label": "logP (lipophilicity)",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "max",
+      "weight": 1.0,
+      "value": 2.84,
+      "desirability": 0.768
+     }
+    ],
+    "blocking": [],
+    "measured": false
+   },
+   "qualified": true
+  },
+  {
+   "smiles": "C=Cc1ccccc1",
+   "name": "Styrene",
+   "rationale": "",
+   "origin": "seed",
+   "descriptors": {
+    "formula": "C8H8",
+    "atoms": 8,
+    "heavy_atoms": 8,
+    "values": {
+     "molwt": 104.2,
+     "logp": 2.33,
+     "tpsa": 0.0,
+     "hbd": 0.0,
+     "hba": 0.0,
+     "rotb": 1.0,
+     "rings": 1.0,
+     "arom_rings": 1.0,
+     "fsp3": 0.0,
+     "heavy": 8.0,
+     "mr": 36.53,
+     "sa": 1.55,
+     "qed": 0.513
+    },
+    "alerts": {},
+    "alert_count": 0
+   },
+   "dft": null,
+   "scoring": {
+    "score": 0.6659,
+    "targets": [
+     {
+      "key": "logp",
+      "label": "logP (lipophilicity)",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "max",
+      "weight": 1.0,
+      "value": 2.33,
+      "desirability": 0.6659
+     }
+    ],
+    "blocking": [],
+    "measured": false
+   },
+   "qualified": true
+  },
+  {
+   "smiles": "Cc1ccccc1",
+   "name": "Toluene",
+   "rationale": "",
+   "origin": "seed",
+   "descriptors": {
+    "formula": "C7H8",
+    "atoms": 7,
+    "heavy_atoms": 7,
+    "values": {
+     "molwt": 92.1,
+     "logp": 2.0,
+     "tpsa": 0.0,
+     "hbd": 0.0,
+     "hba": 0.0,
+     "rotb": 0.0,
+     "rings": 1.0,
+     "arom_rings": 1.0,
+     "fsp3": 0.14,
+     "heavy": 7.0,
+     "mr": 31.18,
+     "sa": 1.0,
+     "qed": 0.459
+    },
+    "alerts": {},
+    "alert_count": 0
+   },
+   "dft": null,
+   "scoring": {
+    "score": 0.599,
+    "targets": [
+     {
+      "key": "logp",
+      "label": "logP (lipophilicity)",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "max",
+      "weight": 1.0,
+      "value": 1.995,
+      "desirability": 0.599
+     }
+    ],
+    "blocking": [],
+    "measured": false
+   },
+   "qualified": true
+  }
+ ],
+ "rejected": 0,
+ "generated": 20,
+ "dft_ran": 0,
+ "dft_cached": 0,
+ "generations": 1,
+ "origins": {
+  "seed": 20
+ },
+ "model_used": "stub",
+ "model_notes": [],
+ "seconds": 0.54,
+ "targets": [
+  {
+   "key": "logp",
+   "aim": "max",
+   "weight": 1.0,
+   "low": null,
+   "high": null,
+   "value": null,
+   "label": "logP (lipophilicity)"
+  }
+ ],
+ "qualified": 20,
+ "requirements": [],
+ "unmet_requirements": [],
+ "rejection_reasons": {},
+ "quality_checks": {
+  "sa_score": true,
+  "qed": true,
+  "alerts": true
+ }
+}

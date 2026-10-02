@@ -1,0 +1,9 @@
+{
+  "base": "https://token.sensenova.cn/v1",
+  "key": "",
+  "model": "sensenova-6.8-flash-lite",
+  "fallback_models": ["deepseek-v4-flash"],
+  "timeout": 90,
+  "retries": 2,
+  "_comment": "The one place the language model is configured. Both readers use it: the chat planner that turns a sentence into a job, and the design agent. The environment variables CHATDFT_LLM_BASE / CHATDFT_LLM_KEY / CHATDFT_LLM_MODEL take priority over this file. Every model in [model, ...fallback_models] is tried in order, so a rate limit on one does not stop a run. Copy this file to data/llm.json and put your own key in `key`. data/llm.json is gitignored because it holds a live credential; this template is what ships."
+}

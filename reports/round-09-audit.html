@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChatDFT 审计 · 第 9 轮 — 出处、自旋、溶剂</title>
+<style>
+  :root {
+    --ink: #1b1f24; --muted: #5b6570; --line: #e2e6ea; --bg: #ffffff;
+    --soft: #f6f8fa; --accent: #1f6feb; --warn: #9a5b00; --warnbg: #fdf3e3;
+    --ok: #1a7f37; --okbg: #eaf6ec; --bad: #b42318; --badbg: #fdeceb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.65 -apple-system, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", Roboto, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 28px 80px; }
+  h1 { font-size: 27px; margin: 0 0 6px; letter-spacing: -.2px; }
+  .sub { color: var(--muted); margin: 0 0 34px; font-size: 14px; }
+  h2 { font-size: 19px; margin: 42px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 26px 0 8px; }
+  p { margin: 10px 0; }
+  code { background: var(--soft); padding: 1px 5px; border-radius: 4px;
+    font-family: "SFMono-Regular", Consolas, monospace; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0;
+    font-size: 14px; }
+  th, td { text-align: left; padding: 9px 11px; border: 1px solid var(--line);
+    vertical-align: top; }
+  th { background: var(--soft); font-weight: 600; }
+  td.n { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    white-space: nowrap; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 12px; font-weight: 600; }
+  .t-ok { background: var(--okbg); color: var(--ok); }
+  .t-bad { background: var(--badbg); color: var(--bad); }
+  .t-warn { background: var(--warnbg); color: var(--warn); }
+  .note { background: var(--warnbg); border-left: 3px solid #f0c99a;
+    padding: 10px 14px; margin: 16px 0; font-size: 14px; }
+  .quote { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    background: var(--soft); padding: 10px 12px; border-radius: 6px;
+    overflow-x: auto; margin: 10px 0; color: #333; }
+  ul { padding-left: 22px; } li { margin: 5px 0; }
+  .kpi { display: flex; gap: 14px; flex-wrap: wrap; margin: 18px 0 4px; }
+  .kpi div { flex: 1 1 150px; border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px 14px; background: var(--soft); }
+  .kpi b { display: block; font-size: 21px; }
+  .kpi span { font-size: 12.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>第 9 轮审计：图注、自旋态与溶剂</h1>
+<p class="sub">四个真实缺陷，各自先复现、再修复、再锁进回归闸门，并以变异测试证明断言会失败。
+所有数字均为本轮实测。</p>
+
+<div class="kpi">
+  <div><b>4</b><span>修复的缺陷</span></div>
+  <div><b>27 → 32</b><span>contract 检查项</span></div>
+  <div><b>4</b><span>变异测试（全部命中）</span></div>
+  <div><b>10/10</b><span>闸门套件（16m41s, exit 0）</span></div>
+</div>
+
+<h2>缺陷一 · 优化收敛判据没有传到频率上</h2>
+<p><code>analysis.vibrations()</code> 内部先做几何优化再算 Hessian，但收敛结论被留在
+一个随即将被丢弃的引擎对象上。于是对一个<strong>根本没有松弛</strong>的结构算出来的
+频率，和真正极小点上的频率，在载荷里长得一模一样。</p>
+<table>
+  <tr><th>体系</th><th>频率 (cm⁻¹)</th><th>载荷说了什么</th></tr>
+  <tr><td>水，优化收敛</td><td class="n">1710.7 / 3720.8 / 3844.6</td><td>正确</td></tr>
+  <tr><td>畸变水，优化只给 2 步</td><td class="n">585.2 / 1099.2 / 1556.3</td>
+      <td><span class="tag t-bad">修复前</span> 与上一行无法区分</td></tr>
+</table>
+<p>修复：<code>vibrations()</code> 收集优化与重跑 SCF 两侧的告警合并进结果，
+并透出 <code>opt_converged</code>（现为 <code>False</code>）、
+<code>opt_grms</code>（0.0555）、<code>opt_criteria</code>。</p>
+
+<h2>缺陷二 · IR 谱图结果里没有计算级别</h2>
+<p>振动分析只返回 16 个键，其中<strong>没有</strong> functional、basis、能量、溶剂。
+后果有两处，都不报错，所以一直没人发现：</p>
+<ul>
+  <li><code>explain_vibrations</code> 用 <code>result.get('functional_label','')</code>
+      拼 level 字符串，实际输出是 “at the &nbsp;/&nbsp; level”——图注是空的；</li>
+  <li>属性面板全部渲染成破折号，因为前端的 <code>fmt(undefined)</code> 返回
+      <code>&ndash;</code> 而不是抛错，任何浏览器闸门都看不见。</li>
+</ul>
+<p>修复：以优化后那次 SCF 的 harvest 为底重建结果，16 → <strong>49</strong> 个键。
+现在自带 <code>B3LYP (hybrid) / 6-31G* (polarised)</code>、
+<code>E = -76.407024 Ha</code>、<code>HOMO -7.90 eV</code>。
+顺带说明：reactivity / surfaces / nci / dos / scan / field 全都带级别字段，
+<strong>只有 vibrations 是例外</strong>。</p>
+
+<h2>缺陷三 · 开壳层从不报告自旋污染 ⟨S²⟩</h2>
+<p>全代码库搜不到 <code>spin_square</code>。一个单行列式不是 S² 的本征函数，
+SCF 也可能收敛到错的态；干净解和破缺对称解此前载荷逐字节相同。</p>
+<table>
+  <tr><th>体系</th><th>⟨S²⟩ 实测</th><th>精确值 S(S+1)</th><th>偏差</th></tr>
+  <tr><td>甲基自由基（二重）</td><td class="n">0.7537</td><td class="n">0.75</td><td class="n">+0.50%</td></tr>
+  <tr><td>O₂（三重）</td><td class="n">2.0065</td><td class="n">2.0</td><td class="n">+0.33%</td></tr>
+  <tr><td>OH（二重）</td><td class="n">0.7519</td><td class="n">0.75</td><td class="n">+0.25%</td></tr>
+  <tr><td>H₂ 三重态（拉到 2.5 Å）</td><td class="n">2.0000</td><td class="n">2.0</td><td class="n">0.00%</td></tr>
+  <tr><td><strong>拉伸 CH₄ 三重态（C–H 2.08 Å）</strong></td>
+      <td class="n">2.6031</td><td class="n">2.0</td>
+      <td><span class="tag t-bad">+30.15%</span></td></tr>
+</table>
+<div class="note">
+关键物理：<strong>只要有一个自旋通道是空的，⟨S²⟩ 就恒等于 S(S+1)</strong>，
+所以 H₂ 三重态无论怎么拉伸都是精确的 2.0000。要真正污染，必须两个通道都占满且强烈局域化 ——
+这正是寻找反例时的路标，而不是随机试分子。
+</div>
+<p>修复：<code>_harvest()</code> 对 <code>mult &gt; 1</code> 计算并报出
+<code>spin</code> 块，偏差超过 10% 时生成告警；前端新增 ⟨S²⟩ 格子（超阈变橙），
+叙述明确区分“在可信范围内”与“已不是纯自旋态”。</p>
+
+<h2>缺陷四 · 溶剂化与气相在结果里无法区分</h2>
+<p>载荷里没有溶剂字段，而两者的每个数字都不同：</p>
+<table>
+  <tr><th>水，B3LYP/6-31G*</th><th>能量 (Ha)</th><th>偶极 (D)</th><th>gap (eV)</th></tr>
+  <tr><td>气相</td><td class="n">-76.406808</td><td class="n">2.0738</td><td class="n">9.775</td></tr>
+  <tr><td>ε = 78.4 (ddCOSMO)</td><td class="n">-76.414105</td><td class="n">2.2705</td><td class="n">10.240</td></tr>
+</table>
+<p>能量低 4.6 kcal/mol、偶极 +9.5%。修复：载荷新增
+<code>solvation</code> 与 <code>solvation_model</code>（<code>ddCOSMO</code>），
+前端加 Solvent 格子，叙述写明“这不是气相计算”。
+闸门不只查标签，还查物理：连续介质<strong>必须</strong>增强极性分子的偶极，
+只打标签而没真正开启模型的计算会被抓出来。</p>
+
+<h3>顺带修掉</h3>
+<ul>
+  <li><code>scan_seconds</code> 恒为 <code>None</code> —— 名字承诺测量值、实际是常量
+      （与上一轮的 <code>n_steps</code> 同类），改为真实计时。</li>
+  <li>扫描图标题硬编码 “Rigid scan:”，改为读取 <code>scan.rigid</code>。
+      将来若加入松弛扫描，不会仍被标成刚性。</li>
+</ul>
+
+<h2>变异测试：每条新断言都被证明会失败</h2>
+<p>修复后故意破坏它守卫的东西，确认闸门以<strong>我写的那条消息</strong>失败，然后还原。</p>
+<table>
+  <tr><th>注入的变异</th><th>闸门输出</th></tr>
+  <tr><td><code>opt_converged</code> 硬编码 True</td>
+      <td class="n">vibrations/starved: … reports opt_converged=True</td></tr>
+  <tr><td>丢弃 warns 收集</td>
+      <td class="n">the unconverged pre-optimisation left no warning</td></tr>
+  <tr><td><code>if False:</code> 关掉自旋计算</td>
+      <td class="n">5× s_squared is None · no spin block</td></tr>
+  <tr><td>污染阈值 10.0 → 1e9</td>
+      <td class="n">a 30%-contaminated wavefunction carries no warning</td></tr>
+</table>
+
+<h2>闸门结果</h2>
+<div class="quote">check_selectors 1 · check_library 63 · agent.designer 97 · contract 32
+selftest 11 · sweep 76 · check_series 16 · check_fields 13 · check_nto 14 · check_reaction 52
+10/10 gates passed   exit=0   16m41s
+browser_design 25 · browser_series 12   2/2 passed</div>
+
+<h2>仍待处理</h2>
+<ul>
+  <li>清理待确认：<code>data/nci_test</code>（约 30 MB）、<code>build/</code> 与
+      <code>tools/</code>（约 2 GB）、<code>data/designs</code> 下 44 个历史文件。</li>
+  <li>刚性扫描的极小点仍受网格量化限制（12 点、步长约 0.05 Å）；
+      若要在论文中引用平衡键长，建议再对最低几点做拟合。</li>
+  <li>尚未实现的常见论文图：NMR 化学位移、拉曼光谱、Mayer 键级、
+      Hirshfeld/ESP 电荷。</li>
+</ul>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,43 @@
+{
+ "format": 2,
+ "key": "methane",
+ "label": "CH4",
+ "formula": "CH4",
+ "geometry": "C-H 1.0897 A x4; H-C-H 109.47 deg (the molecule library)",
+ "geometry_source": "library",
+ "geometry_signature": "c1c45dc24f55",
+ "geometry_documented": "C-H 1.087 A, tetrahedral (experimental r_e)",
+ "basis": "6-31g*",
+ "conv_tol": 1e-13,
+ "field_step_au": 0.0003,
+ "natm": 5,
+ "nao": 22,
+ "atoms_per_element": {
+  "C": 1,
+  "H": 4
+ },
+ "element_shielding_ppm": {
+  "C": {
+   "sigma_iso_ppm": 200.13529336467516,
+   "spread_ppm": 0.0,
+   "n_equivalent": 1,
+   "per_atom_ppm": [
+    200.13529336467516
+   ]
+  },
+  "H": {
+   "sigma_iso_ppm": 32.19832922978113,
+   "spread_ppm": 1.531219595563016e-11,
+   "n_equivalent": 4,
+   "per_atom_ppm": [
+    32.19832922978048,
+    32.198329229774714,
+    32.198329229790026,
+    32.19832922977928
+   ]
+  }
+ },
+ "dE_dB_max": 0.0,
+ "tensor_asymmetry_max_ppm": 3.980417214037393e-10,
+ "cached": false
+}

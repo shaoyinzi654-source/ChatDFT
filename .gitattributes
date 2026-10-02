@@ -1,0 +1,24 @@
+# 换行符策略显式化。
+# 本机 core.autocrlf=true，所以仓库里存的是 LF、检出时是 CRLF。
+# 显式写下来，别人克隆（尤其是 Linux/macOS）时才不会把整个仓库
+# 看成「全部被修改」——本项目的门禁会比对 backend/**/*.py 与
+# frontend/static/js/app.js 的源码指纹，换行符漂移会让那道守卫失准。
+* text=auto
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制，别碰
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg text
+*.cube binary
+*.7z binary
+*.tar.gz binary
+*.zip binary
+*.exe binary
+*.dll binary
+*.pyc binary

@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChatDFT 审计 · 第 18 轮 — 数出来的内存常数、位移的标尺、变异台自己的异常</title>
+<style>
+  :root {
+    --ink: #1b1f24; --muted: #5b6570; --line: #e2e6ea; --bg: #ffffff;
+    --soft: #f6f8fa; --warn: #9a5b00; --warnbg: #fdf3e3;
+    --ok: #1a7f37; --okbg: #eaf6ec; --bad: #b42318; --badbg: #fdeceb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.65 -apple-system, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", Roboto, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 28px 80px; }
+  h1 { font-size: 27px; margin: 0 0 6px; letter-spacing: -.2px; }
+  .sub { color: var(--muted); margin: 0 0 34px; font-size: 14px; }
+  h2 { font-size: 19px; margin: 42px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 26px 0 8px; }
+  p { margin: 10px 0; }
+  code { background: var(--soft); padding: 1px 5px; border-radius: 4px;
+    font-family: "SFMono-Regular", Consolas, monospace; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0;
+    font-size: 14px; }
+  th, td { text-align: left; padding: 9px 11px; border: 1px solid var(--line);
+    vertical-align: top; }
+  th { background: var(--soft); font-weight: 600; }
+  td.n { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    white-space: nowrap; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 12px; font-weight: 600; }
+  .t-ok { background: var(--okbg); color: var(--ok); }
+  .t-bad { background: var(--badbg); color: var(--bad); }
+  .t-warn { background: var(--warnbg); color: var(--warn); }
+  .note { background: var(--warnbg); border-left: 3px solid #f0c99a;
+    padding: 10px 14px; margin: 16px 0; font-size: 14px; }
+  .quote { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    background: var(--soft); border: 1px solid var(--line); border-radius: 5px;
+    padding: 11px 13px; margin: 14px 0; white-space: pre; overflow-x: auto; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 5px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>ChatDFT 审计 · 第 18 轮</h1>
+<p class="sub">数出来的内存常数、位移的标尺、以及变异台自己的异常 ·
+2026-09-16</p>
+
+<p>本轮从一个门禁失败开始。它已经连续多轮通过，这次报的是：</p>
+
+<div class="quote">nmrmissing: the thiophene job ended failed -- NMR at 6-31g* needs
+about 2.5 GB for this molecule (82 basis functions) but only 2.0 GB of
+physical memory is free right now.</div>
+
+<p>机器内存被其它应用占到只剩 1.5–2.2 GB，所以这个拒绝看上去是环境问题。但
+拒绝里那个 <b>2.5 GB 是从哪来的</b>？它来自一个常数乘 nao⁴，而那个常数——
+代码注释里逐项列出了它的来源——<b>从来没有人拿它和一次真实运行比过</b>。
+本轮把它量了，量出来它低了 23%。随后顺藤摸瓜又找出两个缺陷。</p>
+
+<h2>缺陷 1：内存守卫的常数低了 23% <span class="tag t-bad">严重</span></h2>
+
+<h3>它是怎么来的</h3>
+
+<p><code>nmr.py</code> 里的注释写得很整齐，看起来无懈可击：</p>
+
+<div class="quote"># at the worst point four arrays of that size are live at once --
+#   real ERIs                    8 bytes per nao^4
+#   the three GIAO ERI derivatives 24
+#   one pair-swapped direction     8
+#   the complex ERIs of a perturbed SCF 16
+# -- i.e. 56 bytes per nao^4.
+
+_BYTES_PER_NAO4 = 56</div>
+
+<p>问题是这是一张<b>数组清单</b>，不是一次测量。清单里没被算进去的东西——构造
+每个方向的那次变换的临时数组——正好是那缺掉的四分之一。</p>
+
+<h3>量出来是多少</h3>
+
+<p><code>probe_mem1</code> 用 psutil 以 20 ms 间隔采样 <code>shielding_tensor</code>
+的峰值 RSS，基线取在 <code>build_operators</code> <b>之后</b>，所以算子本身不
+计入，测到的就是屏蔽机制的代价：</p>
+
+<table>
+<tr><th>分子</th><th>nao</th><th>实测峰值</th><th>按 56 的估计</th></tr>
+<tr><td>水</td><td class="n">18</td><td class="n">6.4 MB</td><td class="n">5.9 MB</td></tr>
+<tr><td>氨</td><td class="n">20</td><td class="n">8.6 MB</td><td class="n">9.0 MB</td></tr>
+<tr><td>甲醛</td><td class="n">32</td><td class="n">72.2 MB</td><td class="n">58.8 MB</td></tr>
+<tr><td>乙醇</td><td class="n">54</td><td class="n">584.3 MB</td><td class="n">476.2 MB</td></tr>
+</table>
+
+<p>nao⁴ 从 1.05×10⁵ 到 8.5×10⁶，跨 55 倍。四点落在一条过原点的直线上：
+<b>斜率 68.8 字节/nao⁴，截距 +0.2 MB，R² = 0.99997</b>。甲醛那点最能说明问题——
+按 68.8 预测 72.1 MB，实测 72.2 MB。</p>
+
+<h3>低估的后果，早就记在同一个文件里</h3>
+
+<p>这是本轮最值得记下的一处：<code>available_mb()</code> 的文档串里一直写着
+一次事故，却没人把它和那个常数联系起来。</p>
+
+<div class="quote">The first TMS reference was measured at 5165 MB against a 6000 MB
+budget -- which passed -- on a machine that happened to have 1 GB free at the
+time, so it swapped and took 4829 seconds instead of the 285 the same
+calculation took on an idle machine.</div>
+
+<p><b>5165 MB 正是按 56 算出来的</b>（56 × 98⁴ ÷ 10⁶ = 5165）。按 68.8 算，
+同一个作业是 <b>6346 MB &gt; 6000 MB 预算</b>——它本该被直接拒绝，而那次著名的
+一小时磁盘交换根本不该发生。守卫低估四分之一，就会少拒四分之一，而下面那个
+1.25× 的可用内存余量并不能真正兜住 1.23× 的误差。</p>
+
+<p>修法：常数改 69，注释写入四个分子、斜率、R²、截距作为依据。</p>
+
+<h3>契约里那条断言本身就是缺陷的一部分</h3>
+
+<p>旧写法是这样的：</p>
+
+<div class="quote">need = _n.memory_estimate_mb(98)
+if not (4000 &lt; need &lt; 6500):
+    fail.append(f"nmrmem: nao = 98 (TMS at 6-31G*) must be estimated at about 5.2 GB")</div>
+
+<p>它复述的是模块手里那个常数，所以只能抓「有人改动了它」，永远抓不到「这个数
+是错的」——56 在这个区间里舒舒服服待了好几轮。这正是「检查被缺陷本身致盲」：
+检查的参照物和被测对象来自同一个错误来源。</p>
+
+<p>改为在<b>被测出来的单位</b>里断言，带宽足以容纳另一台机器的分配器行为，又
+窄到装不下 56：</p>
+
+<div class="quote">per_nao4 = need * 1e6 / 98 ** 4
+if not (60.0 &lt;= per_nao4 &lt;= 80.0):
+    fail.append(f"nmrmem: the estimate implies {per_nao4:.1f} bytes per nao^4; "
+                f"the peak was measured at 68.8 (probe_mem1, nao 18..54, "
+                f"R^2 0.99997) ...")</div>
+
+<h3>改完这个常数，我自己造出了一个回归</h3>
+
+<p>预算检查是 <code>need &gt; MEMORY_BUDGET_MB</code>，而预算是 <b>6000 MB</b>。
+按数出来的 56，TMS 是 5165 MB，在预算下留 16% 余量；按量出来的 69，同一个参考
+是 <b>6364 MB——超过预算 6%</b>。这个比较<b>根本不看空闲内存</b>，所以在一台
+128 GB 的机器上一样会拒。</p>
+
+<p><code>probe_mem4</code> 实测：</p>
+
+<div class="quote">budget 6000 MB, constant 69 bytes/nao^4
+
+  ammonia        nao= 20  need     11.0 MB  fits
+  chloroform_f   nao= 82  need   3119.6 MB  fits
+  methane        nao= 22  need     16.2 MB  fits
+  phosphine      nao= 24  need     22.9 MB  fits
+  tms            nao= 98  need   6364.3 MB  REFUSED
+  water          nao= 18  need      7.2 MB  fits</div>
+
+<p>而它<b>只在冷缓存上才会发生</b>：<code>reference_shieldings</code> 先读缓存，
+读不到才走到 <code>check_memory</code>。所有门禁都是在 TMS 缓存已热的情况下跑的，
+所以一个全新安装会丢掉全部 ¹H、¹³C、²⁹Si 位移，而<b>没有任何一条门禁会说话</b>。</p>
+
+<p>修法：预算提到 7500 MB（对最大参考保留和原来 6000 MB 相同的约 18% 余量，
+同时仍然拒绝当初设立预算要拦的规模——nao = 200 是 110 GB），并新增一条断言：
+<b>每一个参考化合物都必须放得进预算</b>。这条断言只问预算、不问空闲内存，所以
+机器再忙也不会把它弄红。</p>
+
+<div class="note">
+这一条值得单独记下来，因为它的形状和本轮缺陷 1 完全一样，只是换了一层：
+<b>一个检查的参照物和被测对象来自同一个错误来源，就抓不到那个错误</b>。旧的
+<code>4000 &lt; estimate &lt; 6500</code> 复述常数；而「预算能装下参考物」这件事
+从来没有被任何断言表达过，因为写它的人只知道 5165 那个数。
+</div>
+
+<h2>缺陷 2：两个核的位移不在 IUPAC 主标尺上，而且只字未提 <span class="tag t-bad">严重</span></h2>
+
+<p>每个位移都带着参考化合物的名字，这一条一直是满足的。但<b>名字不是标尺</b>。
+按 Harris 等（<i>Pure Appl. Chem.</i> <b>73</b>, 1795 (2001)）列出的 IUPAC 主
+参考：</p>
+
+<table>
+<tr><th>核</th><th>IUPAC 主参考</th><th>本程序用</th><th>是否一致</th></tr>
+<tr><td>¹H / ¹³C / ²⁹Si</td><td>TMS</td><td>TMS</td><td><span class="tag t-ok">一致</span></td></tr>
+<tr><td>¹⁷O</td><td>H₂O</td><td>H₂O</td><td><span class="tag t-ok">一致</span></td></tr>
+<tr><td>¹⁹F</td><td>CFCl₃</td><td>CFCl₃</td><td><span class="tag t-ok">一致</span></td></tr>
+<tr><td>¹⁵N</td><td>CH₃NO₂（硝基甲烷）</td><td>NH₃</td><td><span class="tag t-warn">差 380.2 ppm</span></td></tr>
+<tr><td>³¹P</td><td>85% H₃PO₄ 水溶液</td><td>PH₃</td><td><span class="tag t-warn">偏移未计算</span></td></tr>
+</table>
+
+<p>两个不一致都是有原因的，而且原因值得写下来：</p>
+
+<ul>
+<li><b>¹⁵N</b>：主参考硝基甲烷是 66 个基函数，按修好的常数约 1.3 GB。液氨是
+公认的<b>次级</b>标准，所以数不算错——但它离论文常用的标尺 <b>380.2 ppm</b>。</li>
+<li><b>³¹P</b>：主参考是 85% H₃PO₄ <b>水溶液</b>，那是混合物，气相程序根本算
+不了；纯 H₃PO₄ 是 85 个基函数、约 3.5 GB。</li>
+</ul>
+
+<p>为什么这件事必须说：380 ppm 比大多数官能团的整个 ¹⁵N 范围还大。用户拿本程序
+的 ¹⁵N 位移和论文比，会把这整段标尺差读成计算错误。</p>
+
+<h3>修法：标注，而不是换参考</h3>
+
+<p>新增 <code>IUPAC_PRIMARY</code> 表与 <code>scale_note(el)</code>。关键设计是
+它<b>和 <code>REFERENCE_FOR</code> 比对</b>，而不是存一个布尔标志：将来真把
+硝基甲烷加进参考表，标注会自己消失，而不是变成一句陈旧的谎言。</p>
+
+<p>每个核的条目带 <code>reference_scale_note</code>，在主标尺上是 <code>None</code>
+而<b>字段存在</b>——调用方才能区分「在主标尺上」和「没人想过标尺」；同一句话
+也进警告列表，并且在 <code>references[el].scale_note</code> 里再带一份，前端把它
+渲染成参考化合物名字旁边的一枚警示标签。最后这一步是刻意的：<b>本项目记过
+「无人消费的字段」这种缺陷</b>——字段算对了、断言也过了，就是没人读，等于没做。
+实测氨的载荷：</p>
+
+<div class="quote">N   delta    0.000 ppm  note: N is quoted against NH3, not the IUPAC primary
+                           reference CH3NO2 (nitromethane, neat liquid). sub...
+elements ['H', 'N']; field present on ['H', 'N']</div>
+
+<div class="note">
+<b>关于 ³¹P 的那个数字。</b>我查到 380.2 ppm 是有出处的（氨标尺→硝基甲烷标尺
+减去 380.2）。³¹P 我只找到可外推的数据：UCSB 表给 PMe₃ −62、PMe₂H −99、
+PMeH₂ −163.5，外推 PH₃ ≈ −240。按本项目的规矩，<b>外推值不写进产品</b>。所以
+³¹P 的标注改为写明「偏移是 PH₃ 自己在 H₃PO₄ 标尺上的位移，本程序不计算它；
+它不小，不得假定为 0」。<b>缺一个数就说缺一个数，不拿估的顶替。</b>
+</div>
+
+<h2>缺陷 3：变异台自己的异常捕获，被自己的 reload 顺序废掉 <span class="tag t-warn">工具</span></h2>
+
+<p>噻吩被内存守卫拒绝时抛 <code>DFTError</code>，而它从
+<code>make_payload_thiophene</code> 里<b>穿了出去</b>，整个变异台崩溃退出。这是
+最坏的一种结果：一个崩溃让其余 20 多个变异全都跑不到，报告看起来像「什么都没
+抓到」，真相是「什么都没跑」。</p>
+
+<p>第一次修法我写了 <code>from backend.engine.dft import DFTError</code>——
+<b>仍然崩</b>。原因很有意思：<code>reload_engine()</code> 先重载 <code>nmr</code>
+再重载 <code>dft</code>，于是 <code>dft</code> 的 <code>DFTError</code> 变成了
+<b>新类对象</b>，而 <code>nmr</code> 手里还攥着<b>旧类对象</b>。两个不同的类，
+<code>except</code> 新类抓不到旧类。改成 <code>except N.DFTError</code>——抛出
+异常的那个模块自己持有的类——就与 reload 顺序无关了。</p>
+
+<p>同时把 thiophene 那一组如实记为 <b>SKIPPED</b>：<code>run_checks</code> 拿不到
+载荷就不会走到 <code>nmr_unreferenced_sections</code>，那条断言不可能失败。把
+「从未运行」报成「没抓到」，比报成「跳过」更糟。</p>
+
+<h2>缺陷 4：14 个核「没有参考」只是一张清单，没有理由 <span class="tag t-warn">记录</span></h2>
+
+<p>README 一直写着 14 个 NMR 活性核没有参考化合物（Al B Br Cl D Hg I Li Na Pb Pt
+S Se Sn），但<b>不说为什么</b>。一张没有理由的清单，正是缺口变成传说的方式：没人
+分得清哪些是决定、哪些是遗漏。实测下来它<b>两者都有</b>，而且理由各不相同。</p>
+
+<h3>先量清楚哪些是基组问题</h3>
+
+<p>用 <code>gto.basis.load</code> 直接问基组（<code>probe_ref1</code>）。这里我
+自己先踩了一个坑：第一版探针去建裸原子，结果把 Al、B、Br、Cl、Li、Na、D 全报成
+「NO BASIS」——真相是 <code>Electron number 13 and spin 0 are not consistent</code>，
+闭壳层检查在基组被查之前就抛了。<b>14 条理由里有 7 条差点写错。</b></p>
+
+<table>
+<tr><th>原因</th><th>元素</th><th>依据</th></tr>
+<tr><td>6-31G* 里根本没有</td><td class="n">Hg I Pb Pt Sn</td>
+    <td><code>BasisNotFoundError</code></td></tr>
+<tr><td>标准是<b>溶液</b>不是分子</td>
+    <td class="n">Li Na Al Cl Br S</td>
+    <td>LiCl/D₂O、NaCl/D₂O、Al(NO₃)₃/D₂O、NaCl/D₂O、NaBr/D₂O、
+        饱和 (NH₄)₂SO₄/D₂O（³³S 跨度 964 ppm，−290 至 674）</td></tr>
+<tr><td>标准是分子但装不下</td><td class="n">B</td>
+    <td>BF₃·OEt₂：19 原子、nao=146、<b>30.6 GB</b>，预算的 4 倍（probe_ref2）</td></tr>
+<tr><td>既非不可能、也还没做</td><td class="n">Se D</td>
+    <td>都在基组里，⁷⁷Se 与 ²H 都可以有分子参考——<b>记为缺口，不记为理由</b></td></tr>
+</table>
+
+<p>六条「溶液」的理由值得展开：气相孤立离子的屏蔽<b>不在这把标尺上</b>，而卤素阴离子
+还需要 6-31G* 没有的弥散函数。算出来的会是一个「穿着别人标尺名字」的数——正是
+¹⁵N/³¹P 那两条标注要防的那种错。</p>
+
+<h3>修法：把理由变成代码里的一等数据</h3>
+
+<p>新增 <code>NO_REFERENCE_WHY</code>，理由进入用户看到的告警（不再只是名字），
+并加一条断言把<b>两个集合绑死</b>：理由的键集必须<b>恰好等于</b>「NMR 活性但无
+参考」的元素集。于是加参考就必须删理由、删理由就必须加参考，两边无法各自漂移。</p>
+
+<div class="quote">nmrref: the unreferenced nuclei are ['Al', 'B', ...] but the reasons
+cover [...]; missing reasons [...], stale reasons [...]</div>
+
+<h2>缺陷 5：³¹P 能算，却没有任何一个分子能按名字取到 <span class="tag t-warn">功能缺口</span></h2>
+
+<p>上一轮结尾记下了这个缺口：分子库 62 条里一条含磷的都没有。³¹P 有参考化合物、
+有标尺标注、在同位素表和谱图通道里都有位置——<b>却没有任何一个可以按名字取到的
+分子</b>。这个功能只对已经知道 SMILES 的人存在，而没有任何一条门禁能发现它，
+因为所有门禁都在测零件，没有一条在测接缝。</p>
+
+<h3>为什么不能直接加 PH₃</h3>
+
+<p>PH₃ 就是 ³¹P 的参考化合物，而「库里有该参考物就用库几何」这条规则会把参考从
+实验 r_e 换成 RDKit 松弛出来的几何，<b>整条 ³¹P 标尺随之移动</b>。这不是舍入
+误差：本项目实测过，两个 PH₃ 几何之间 ³¹P 屏蔽差 <b>2.819 ppm</b>。所以加了
+一个<b>邻居</b>，而不是参考物本身。</p>
+
+<h3>加了一对，而不是一个</h3>
+
+<table>
+<tr><th>分子</th><th>nao</th><th>内存估计</th><th>δ(³¹P) vs PH₃</th><th>耗时</th></tr>
+<tr><td>甲基膦 CH₃PH₂</td><td class="n">42</td><td class="n">0.21 GB</td>
+    <td class="n">+66.409 ppm</td><td class="n">11.4 s</td></tr>
+<tr><td>二甲基膦 (CH₃)₂PH</td><td class="n">60</td><td class="n">0.87 GB</td>
+    <td class="n">+107.340 ppm</td><td class="n">24.5 s</td></tr>
+</table>
+
+<p>选一对是有意的：连续甲基取代是 ³¹P 的经典趋势，而一个把趋势当卖点的程序，
+应该能在它刚学会的核上展示一条。两个都足够便宜，可以在门禁里反复跑。</p>
+
+<p><b>方向对，绝对值不可核对。</b>每次甲基化使 δ 更正——计算与文献趋势一致，
+间距也在合理量级。但绝对位置取决于 PH₃ 到 85% H₃PO₄ 的偏移，而那正是本程序
+<b>不计算</b>的那个数。这恰恰是标尺标注存在的理由：数字给了，但说清楚它站在
+哪把尺子上。</p>
+
+<h3>把它变成一条规则</h3>
+
+<p>缺口之所以能存在，是因为<b>没有人把覆盖规则说出来</b>。现在它是一条断言，
+放在库被加载的地方：<b>每一个有参考化合物的核，都必须至少被一个库条目携带。</b>
+它只比较两个内存里的集合，不花任何计算。变异 L21（拿掉那两个磷条目，还原成本轮
+之前的状态）精确命中。</p>
+
+<h2>缺陷 6：一个变异体从未运行过，有两个各自独立的原因 <span class="tag t-bad">严重</span></h2>
+
+<p>补 ³¹P 覆盖时顺手做了一件事：给分子库加一个含磷分子。加完之后去核对变异台，
+发现 <b>L20 每次都以「mutation not applicable」收场</b>——不是失败，是<b>根本没跑</b>。
+而且它有两个各自独立的原因，任何一个都足以让它永远不触发。</p>
+
+<h3>原因一：查找键不匹配，默认值把错误吞掉了</h3>
+
+<p>变异台要改的文件按标签查表：</p>
+
+<div class="quote">MUTATION_FILE = {"L20": ELE}          # 键是短码
+...
+path = MUTATION_FILE.get(label, MOL)  # 传进来的是完整标签</div>
+
+<p>而循环传的 <code>label</code> 是完整标签
+<code>"L20 bond-perception-misses-dihydrogen"</code>。于是查找落空，
+<code>dict.get</code> 静默回退到默认文件 <code>molecule.py</code>——那个文件里
+当然没有目标串，于是报告「不适用」。<b>一个静默吸收键不匹配的默认值，把「从未
+运行的测试」变成了「什么都没抓到的测试」</b>，而默认值本身是有用的（另外 5 个
+变异确实住在 <code>molecule.py</code>），所以不能简单删掉它。</p>
+
+<h3>原因二：变异台自己的 reload 不包含被改的文件</h3>
+
+<p>把键改对之后，L20 <b>仍然不触发</b>。真因在 reload：</p>
+
+<div class="quote">for mod in ("backend.engine.molecule", "backend.contract"):   # 没有 elements
+    importlib.reload(sys.modules[mod])</div>
+
+<p>L20 改写的是 <code>elements.py</code> 里的 H–H 键长阈值，而契约那侧是
+<code>from backend.engine.elements import bond_cutoff</code>——它返回的是
+<code>sys.modules</code> 里那个<b>没被重载过的旧函数</b>。所以无论变异怎么写都
+不可能生效。<b>这和 NMR 变异台那个「重载顺序产生两个异常类」是同一类缺陷：变异台
+自己的机制废掉了自己的测试。</b></p>
+
+<h3>而且它还因为错误的原因「触发」过</h3>
+
+<p>修好前两项之后，L20 报出了 4 条失败——但前 3 条全是 propane 的遗留字段，属于
+变异台给<b>每个</b>代码变异注入的 legacy-schema 噪声（那是给两个读取器变异用的），
+L20 自己那条根本不在里面。这正是本项目记过的「多个变异同时施加，成功看起来
+一样」。现已改为<b>只给需要它的两个变异注入</b>，L20 现在只报一条，就是它自己
+那条：</p>
+
+<div class="quote">MUTATION L20 bond-perception-misses-dihydrogen
+  -> 1 failure(s) raised:
+       library/hydrogen: its coordinates fall into 2 piece(s) but the SMILES
+       '[H][H]' names 1.  A structure that is not connected the way its own
+       name says is not that molecule</div>
+
+<p>并在启动时加了一道检查：任何键不是真实标签、或目标串不在它所指文件里，直接
+拒绝运行（<code>probe_p6</code> 验证了它两半都会拦）。</p>
+
+<div class="note">
+这是本轮第三次遇到同一形状的缺陷——<b>报告说「什么都没抓到」，真相是「什么都没
+跑」</b>。前两次是 NMR 变异台的异常类（重载顺序）和它崩溃时把其余变异一起带走。
+一个测试套件最危险的状态不是红色，是<b>绿色而从未运行</b>。
+</div>
+
+<h2>验证</h2>
+
+<table>
+<tr><th>检查</th><th>结果</th></tr>
+<tr><td><code>probe_mem1/2/3</code> 常数校准</td>
+    <td><span class="tag t-ok">68.8 字节/nao⁴，R² 0.99997，截距 +0.2 MB</span></td></tr>
+<tr><td><code>probe_nmr36</code> 标注端到端</td>
+    <td><span class="tag t-ok">进警告 + 进每核条目；氨 ¹⁵N = 0.000 ppm</span></td></tr>
+<tr><td><code>probe_mem4</code> 预算是否容纳参考物</td>
+    <td><span class="tag t-ok">7500 MB 下六个参考全部放得下</span></td></tr>
+<tr><td><code>backend.mutate_nmr</code></td>
+    <td><span class="tag t-ok">31/31 全部触发，零跳过</span></td></tr>
+<tr><td><code>backend.mutate_library</code></td>
+    <td><span class="tag t-ok">21/21 全部触发（此前 L20 从未运行）</span></td></tr>
+<tr><td><code>probe_p2</code> 首次真实 ³¹P 作业</td>
+    <td><span class="tag t-ok">两个分子都出峰、标尺标注到位、互不相同</span></td></tr>
+<tr><td><code>probe_p3</code> 核覆盖</td>
+    <td><span class="tag t-ok">7/7 个有参考的核都能按名字取到</span></td></tr>
+<tr><td><code>probe_p4 / probe_p6</code> 新断言自检</td>
+    <td><span class="tag t-ok">覆盖断言与启动检查都见过它失败</span></td></tr>
+<tr><td>N26 内存常数改回 56</td>
+    <td><span class="tag t-ok">精确命中新断言</span></td></tr>
+<tr><td>N27 隐藏标尺标注 / N28 换算错十倍</td>
+    <td><span class="tag t-ok">均触发</span></td></tr>
+<tr><td>N29 预算改回 6000</td>
+    <td><span class="tag t-ok">命中「tms 参考放不进预算」</span></td></tr>
+<tr><td>N30 丢掉硫的理由</td>
+    <td><span class="tag t-ok">命中集合不匹配</span></td></tr>
+<tr><td>N31 载荷里去掉 <code>scale_note</code></td>
+    <td><span class="tag t-ok">命中 H/O 各一条</span></td></tr>
+<tr><td>N18 未参考核（需噻吩）</td>
+    <td><span class="tag t-ok">本轮内存够了，实测触发 2 条</span></td></tr>
+<tr><td><code>probe_html1</code> 报告自检</td>
+    <td><span class="tag t-ok">标签闭合、表格列宽一致、10/10 数字齐全</span></td></tr>
+</table>
+
+<p>N18 值得单独说一句：它上一轮被记为 <b>SKIPPED</b>，因为噻吩（nao = 82）过不了
+内存守卫。本轮内存腾出来之后它真的跑了——噻吩 187 s 建成载荷，变异触发 2 条失败，
+<code>unreferenced_elements</code> 实测为 <code>['S']</code>。一条被跳过的断言和
+一条通过的断言<b>看起来必须不一样</b>，这一轮才真正做到了这一点。</p>
+
+<p>顺带印证了一条本项目一贯的结论：SMILES 建的 PH₃ 与参考用的实验几何不同，
+所以位移是 <b>2.819 ppm</b> 而不是 0——几何敏感性在 ³¹P 上也一样真实。</p>
+
+<h3>回归门禁</h3>
+
+<p>11 道门禁全部通过，共 <b>396 项检查</b>。其中 <code>contract</code> 是连续几轮
+唯一失败的那一道（机器内存不足导致多个作业超时），本轮首次全绿：</p>
+
+<table>
+<tr><th>门禁</th><th>检查数</th><th>结果</th></tr>
+<tr><td class="n">check_selectors</td><td class="n">1</td><td><span class="tag t-ok">PASS</span></td></tr>
+<tr><td class="n">check_library</td><td class="n">65</td><td><span class="tag t-ok">PASS</span></td></tr>
+<tr><td class="n">agent.designer</td><td class="n">97</td><td><span class="tag t-ok">PASS</span></td></tr>
+<tr><td class="n">contract</td><td class="n">51</td><td><span class="tag t-ok">PASS</span></td></tr>
+<tr><td class="n">selftest</td><td class="n">10</td><td><span class="tag t-ok">PASS</span></td></tr>
+<tr><td class="n">sweep</td><td class="n">76</td><td><span class="tag t-ok">PASS</span></td></tr>
+<tr><td class="n">check_series</td><td class="n">16</td><td><span class="tag t-ok">PASS</span></td></tr>
+<tr><td class="n">check_fields</td><td class="n">13</td><td><span class="tag t-ok">PASS</span></td></tr>
+<tr><td class="n">check_nto</td><td class="n">14</td><td><span class="tag t-ok">PASS</span></td></tr>
+<tr><td class="n">check_reaction</td><td class="n">52</td><td><span class="tag t-ok">PASS</span></td></tr>
+<tr><td class="n">verify_library_geometry</td><td class="n">1</td><td><span class="tag t-ok">PASS</span></td></tr>
+</table>
+
+<div class="note">
+<b>工具上的一课。</b>整轮门禁跑一次要二十多分钟，本轮的会话窗口反复把它截断，
+而且每次截断都会留下一个 8000 端口上的残留服务——下一个要改 <code>nmr.py</code>
+的进程（变异台）就会拒绝启动。清理脚本还踩了一个自己的坑：写成
+<code>python -c "... 'backend.server' in cmdline ..."</code> 时，<b>匹配串就在
+自己的命令行里</b>，脚本会先杀掉自己。落成文件（命令行只剩文件名）才安全，而且
+必须先杀 <code>backend.gates</code> 再杀服务器——套件会把服务器重新拉起来。
+现在门禁按子集分批跑，每批都能在一次窗口内跑完。
+</div>
+
+<h2>本轮记下的、还没做的事</h2>
+
+<ul>
+<li><b>分子库 62 条里一条含磷的都没有</b>（含氮的有 18 条）。所以 ³¹P 这条路径
+从未被任何真实作业走过，只有参考层被契约检查过。要么加一个含磷分子，要么正式
+记录为什么不加。</li>
+<li><code>_BYTES_PER_NAO4</code> 的实测只有四个点、最大 nao = 54；nao = 82 和
+98 处仍是线性外推。斜率看起来干净，但没人验证过。</li>
+<li>14 个无参考核（Al B Br Cl D Hg I Li Na Pb Pt S Se Sn）目前只是告警。要正式
+记录为何不提供：6-31G* 只覆盖到 Ar，而其中 Cl/Li/Na/Al 的 IUPAC 标准都是
+<b>水合离子</b>——气相孤立离子算出来的屏蔽，对水合标尺没有意义。</li>
+</ul>
+
+</main>
+</body>
+</html>

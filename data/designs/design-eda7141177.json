@@ -1,0 +1,681 @@
+{
+ "id": "eda7141177",
+ "brief": {
+  "text": "Design 6 amine molecules for CO2 capture with molecular weight below 250",
+  "goal": "Design amine-based molecules for CO2 capture with molecular weight below 250, optimizing for high amine functionality, water solubility, and low molecular weight to ensure fast reaction kinetics and low viscosity",
+  "n_candidates": 6,
+  "generations": 1,
+  "dft_top": 1,
+  "max_atoms": 30,
+  "min_atoms": 3,
+  "max_molwt": 250.0,
+  "min_molwt": null,
+  "max_logp": null,
+  "min_logp": null,
+  "allowed_elements": null,
+  "forbidden_elements": [],
+  "required_smarts": [
+   "[NH1,H2]"
+  ],
+  "forbidden_smarts": [],
+  "seeds": [
+   "NCCO",
+   "OCCNCCO",
+   "C1CCNCC1",
+   "CC(C)(N)CO",
+   "CN(CCO)CCO",
+   "OCCN(CCO)CCO"
+  ],
+  "seed_focus": [],
+  "seed_names": [],
+  "functional": "b3lyp",
+  "basis": "6-31g*",
+  "notes": [],
+  "has_numeric": true,
+  "alert_filter": "none",
+  "optimize_leads": false,
+  "targets": [
+   {
+    "key": "molwt",
+    "aim": "min",
+    "weight": 1.0,
+    "low": 50.0,
+    "high": 250.0,
+    "value": null,
+    "label": "Molecular weight"
+   },
+   {
+    "key": "hba",
+    "aim": "max",
+    "weight": 1.5,
+    "low": 2.0,
+    "high": 6.0,
+    "value": null,
+    "label": "Hydrogen-bond acceptors"
+   },
+   {
+    "key": "logp",
+    "aim": "min",
+    "weight": 1.0,
+    "low": -3.0,
+    "high": 3.0,
+    "value": null,
+    "label": "logP (lipophilicity)"
+   },
+   {
+    "key": "tpsa",
+    "aim": "max",
+    "weight": 0.8,
+    "low": 20.0,
+    "high": 90.0,
+    "value": null,
+    "label": "Topological polar surface area"
+   }
+  ]
+ },
+ "candidates": [
+  {
+   "smiles": "NCCNC(N)CNCCO",
+   "name": "C6H18N4O",
+   "rationale": "",
+   "origin": "mutation",
+   "descriptors": {
+    "formula": "C6H18N4O",
+    "atoms": 11,
+    "heavy_atoms": 11,
+    "values": {
+     "molwt": 162.2,
+     "logp": -2.6,
+     "tpsa": 96.33,
+     "hbd": 5.0,
+     "hba": 5.0,
+     "rotb": 7.0,
+     "rings": 0.0,
+     "arom_rings": 0.0,
+     "fsp3": 1.0,
+     "heavy": 11.0,
+     "mr": 44.99,
+     "sa": 3.5,
+     "qed": 0.209
+    },
+    "alerts": {
+     "BRENK": [
+      "Aliphatic_long_chain",
+      "het-C-het_not_in_ring"
+     ],
+     "NIH": [
+      "gte_4_basic_N",
+      "non_ring_acetal"
+     ]
+    },
+    "alert_count": 4
+   },
+   "dft": {
+    "energy_hartree": -533.6217331073176,
+    "homo_ev": -5.6570139357417055,
+    "lumo_ev": 1.7893362453553,
+    "gap_ev": 7.446350181097006,
+    "dipole": 2.429599123000665,
+    "functional": "b3lyp",
+    "functional_label": "B3LYP (hybrid)",
+    "basis": "6-31g*",
+    "basis_label": "6-31G* (polarised)",
+    "scf_seconds": 28.348,
+    "converged": true,
+    "natoms": 29,
+    "geometry_source": "MMFF94 (RDKit ETKDGv3)",
+    "optimized": false,
+    "opt_seconds": null,
+    "opt_backend": null,
+    "opt_steps": null,
+    "cached": false
+   },
+   "scoring": {
+    "score": 0.7349,
+    "targets": [
+     {
+      "key": "molwt",
+      "label": "Molecular weight",
+      "unit": "g/mol",
+      "source": "rdkit",
+      "aim": "min",
+      "weight": 1.0,
+      "value": 162.237,
+      "desirability": 0.4388
+     },
+     {
+      "key": "hba",
+      "label": "Hydrogen-bond acceptors",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "max",
+      "weight": 1.5,
+      "value": 5.0,
+      "desirability": 0.75
+     },
+     {
+      "key": "logp",
+      "label": "logP (lipophilicity)",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "min",
+      "weight": 1.0,
+      "value": -2.599,
+      "desirability": 0.9331
+     },
+     {
+      "key": "tpsa",
+      "label": "Topological polar surface area",
+      "unit": "A^2",
+      "source": "rdkit",
+      "aim": "max",
+      "weight": 0.8,
+      "value": 96.33,
+      "desirability": 1.0
+     }
+    ],
+    "blocking": [],
+    "measured": true,
+    "scored": true
+   },
+   "qualified": true,
+   "discussion": "This lead has the lowest molecular weight (162.2) and the most negative logP (-2.6) among the set, along with a high TPSA of 96.33 Å² and five hydrogen-bond donors and acceptors, giving excellent aqueous solubility and amine density. Its score of 0.7349 reflects these strengths. The main risk is the seven rotatable bonds, which may promote high viscosity and slow diffusion in concentrated capture solutions."
+  },
+  {
+   "smiles": "NC(CNCCO)NCCO",
+   "name": "C6H17N3O2",
+   "rationale": "",
+   "origin": "mutation",
+   "descriptors": {
+    "formula": "C6H17N3O2",
+    "atoms": 11,
+    "heavy_atoms": 11,
+    "values": {
+     "molwt": 163.2,
+     "logp": -2.56,
+     "tpsa": 90.54,
+     "hbd": 5.0,
+     "hba": 5.0,
+     "rotb": 7.0,
+     "rings": 0.0,
+     "arom_rings": 0.0,
+     "fsp3": 1.0,
+     "heavy": 11.0,
+     "mr": 43.02,
+     "sa": 3.44,
+     "qed": 0.21
+    },
+    "alerts": {
+     "BRENK": [
+      "Aliphatic_long_chain",
+      "het-C-het_not_in_ring"
+     ],
+     "NIH": [
+      "non_ring_acetal"
+     ]
+    },
+    "alert_count": 3
+   },
+   "dft": null,
+   "scoring": {
+    "score": 0.732,
+    "targets": [
+     {
+      "key": "molwt",
+      "label": "Molecular weight",
+      "unit": "g/mol",
+      "source": "rdkit",
+      "aim": "min",
+      "weight": 1.0,
+      "value": 163.221,
+      "desirability": 0.4339
+     },
+     {
+      "key": "hba",
+      "label": "Hydrogen-bond acceptors",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "max",
+      "weight": 1.5,
+      "value": 5.0,
+      "desirability": 0.75
+     },
+     {
+      "key": "logp",
+      "label": "logP (lipophilicity)",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "min",
+      "weight": 1.0,
+      "value": -2.565,
+      "desirability": 0.9275
+     },
+     {
+      "key": "tpsa",
+      "label": "Topological polar surface area",
+      "unit": "A^2",
+      "source": "rdkit",
+      "aim": "max",
+      "weight": 0.8,
+      "value": 90.54,
+      "desirability": 1.0
+     }
+    ],
+    "blocking": [],
+    "measured": false,
+    "scored": true
+   },
+   "qualified": true,
+   "discussion": "With MW 163.2, logP -2.56, TPSA 90.54, and equal HBD/HBA counts of 5, this candidate is very close to the top lead and scores 0.732. The slightly higher mass and 5.79 Å² lower TPSA make it a marginal compromise. Its seven rotatable bonds again raise the same viscosity concern, while the lower TPSA slightly reduces the polarity benefit."
+  },
+  {
+   "smiles": "NCCNCCN(N)CCO",
+   "name": "C6H18N4O",
+   "rationale": "",
+   "origin": "mutation",
+   "descriptors": {
+    "formula": "C6H18N4O",
+    "atoms": 11,
+    "heavy_atoms": 11,
+    "values": {
+     "molwt": 162.2,
+     "logp": -2.3,
+     "tpsa": 87.54,
+     "hbd": 4.0,
+     "hba": 5.0,
+     "rotb": 7.0,
+     "rings": 0.0,
+     "arom_rings": 0.0,
+     "fsp3": 1.0,
+     "heavy": 11.0,
+     "mr": 44.77,
+     "sa": 3.04,
+     "qed": 0.192
+    },
+    "alerts": {
+     "BRENK": [
+      "Aliphatic_long_chain",
+      "hydrazine",
+      "Oxygen-nitrogen_single_bond"
+     ],
+     "NIH": [
+      "gte_4_basic_N",
+      "hydrazine"
+     ]
+    },
+    "alert_count": 5
+   },
+   "dft": null,
+   "scoring": {
+    "score": 0.7207,
+    "targets": [
+     {
+      "key": "molwt",
+      "label": "Molecular weight",
+      "unit": "g/mol",
+      "source": "rdkit",
+      "aim": "min",
+      "weight": 1.0,
+      "value": 162.237,
+      "desirability": 0.4388
+     },
+     {
+      "key": "hba",
+      "label": "Hydrogen-bond acceptors",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "max",
+      "weight": 1.5,
+      "value": 5.0,
+      "desirability": 0.75
+     },
+     {
+      "key": "logp",
+      "label": "logP (lipophilicity)",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "min",
+      "weight": 1.0,
+      "value": -2.297,
+      "desirability": 0.8829
+     },
+     {
+      "key": "tpsa",
+      "label": "Topological polar surface area",
+      "unit": "A^2",
+      "source": "rdkit",
+      "aim": "max",
+      "weight": 0.8,
+      "value": 87.54,
+      "desirability": 0.9649
+     }
+    ],
+    "blocking": [],
+    "measured": false,
+    "scored": true
+   },
+   "qualified": true,
+   "discussion": "This candidate matches the lowest molecular weight (162.2) but has a less favorable logP (-2.3) and lower TPSA (87.54) than the top two, and HBD drops to 4. The score of 0.7207 shows the penalty from reduced hydrogen-bond donor capacity and lower hydrophilicity. The main risk is that fewer N-H donors may slow amine-CO2 carbamate formation and reduce water solubility."
+  },
+  {
+   "smiles": "O=[N+]([O-])C(O)CN(CCO)CCO",
+   "name": "C6H14N2O5",
+   "rationale": "",
+   "origin": "mutation",
+   "descriptors": {
+    "formula": "C6H14N2O5",
+    "atoms": 13,
+    "heavy_atoms": 13,
+    "values": {
+     "molwt": 194.2,
+     "logp": -2.13,
+     "tpsa": 107.07,
+     "hbd": 3.0,
+     "hba": 6.0,
+     "rotb": 7.0,
+     "rings": 0.0,
+     "arom_rings": 0.0,
+     "fsp3": 1.0,
+     "heavy": 13.0,
+     "mr": 43.61,
+     "sa": 3.66,
+     "qed": 0.243
+    },
+    "alerts": {
+     "BRENK": [
+      "het-C-het_not_in_ring",
+      "nitro_group",
+      "Oxygen-nitrogen_single_bond"
+     ],
+     "NIH": [
+      "non_ring_acetal"
+     ]
+    },
+    "alert_count": 4
+   },
+   "dft": null,
+   "scoring": {
+    "score": 0.7167,
+    "targets": [
+     {
+      "key": "molwt",
+      "label": "Molecular weight",
+      "unit": "g/mol",
+      "source": "rdkit",
+      "aim": "min",
+      "weight": 1.0,
+      "value": 194.187,
+      "desirability": 0.2791
+     },
+     {
+      "key": "hba",
+      "label": "Hydrogen-bond acceptors",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "max",
+      "weight": 1.5,
+      "value": 6.0,
+      "desirability": 1.0
+     },
+     {
+      "key": "logp",
+      "label": "logP (lipophilicity)",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "min",
+      "weight": 1.0,
+      "value": -2.132,
+      "desirability": 0.8553
+     },
+     {
+      "key": "tpsa",
+      "label": "Topological polar surface area",
+      "unit": "A^2",
+      "source": "rdkit",
+      "aim": "max",
+      "weight": 0.8,
+      "value": 107.07,
+      "desirability": 1.0
+     }
+    ],
+    "blocking": [],
+    "measured": false,
+    "scored": true
+   },
+   "qualified": true,
+   "discussion": "This molecule has the highest HBA count (6) and the largest TPSA (107.07 Å²) in the series, with logP -2.13 still strongly hydrophilic, giving it a score of 0.7167. However, its MW of 194.2 is noticeably higher than the leads, and HBD is only 3, so amine functionality per mass is lower. The nitro group boosts polar surface area but adds weight without adding amine hydrogens, so the main trade-off is reduced gravimetric capacity and potentially higher viscosity."
+  },
+  {
+   "smiles": "OCCN(CCO)CC(O)O",
+   "name": "C6H15NO4",
+   "rationale": "",
+   "origin": "mutation",
+   "descriptors": {
+    "formula": "C6H15NO4",
+    "atoms": 11,
+    "heavy_atoms": 11,
+    "values": {
+     "molwt": 165.2,
+     "logp": -2.42,
+     "tpsa": 84.16,
+     "hbd": 4.0,
+     "hba": 5.0,
+     "rotb": 6.0,
+     "rings": 0.0,
+     "arom_rings": 0.0,
+     "fsp3": 1.0,
+     "heavy": 11.0,
+     "mr": 38.84,
+     "sa": 2.77,
+     "qed": 0.329
+    },
+    "alerts": {
+     "BRENK": [
+      "het-C-het_not_in_ring"
+     ],
+     "NIH": [
+      "non_ring_acetal"
+     ]
+    },
+    "alert_count": 2
+   },
+   "dft": null,
+   "scoring": {
+    "score": 0.7119,
+    "targets": [
+     {
+      "key": "molwt",
+      "label": "Molecular weight",
+      "unit": "g/mol",
+      "source": "rdkit",
+      "aim": "min",
+      "weight": 1.0,
+      "value": 165.189,
+      "desirability": 0.4241
+     },
+     {
+      "key": "hba",
+      "label": "Hydrogen-bond acceptors",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "max",
+      "weight": 1.5,
+      "value": 5.0,
+      "desirability": 0.75
+     },
+     {
+      "key": "logp",
+      "label": "logP (lipophilicity)",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "min",
+      "weight": 1.0,
+      "value": -2.416,
+      "desirability": 0.9027
+     },
+     {
+      "key": "tpsa",
+      "label": "Topological polar surface area",
+      "unit": "A^2",
+      "source": "rdkit",
+      "aim": "max",
+      "weight": 0.8,
+      "value": 84.16,
+      "desirability": 0.9166
+     }
+    ],
+    "blocking": [],
+    "measured": false,
+    "scored": true
+   },
+   "qualified": true,
+   "discussion": "This candidate has a low MW of 165.2, a good logP of -2.42, and only six rotatable bonds, which is favorable for lower viscosity. Its score of 0.7119 is held back by a lower TPSA (84.16 Å²) and only four HBDs, reducing aqueous solubility and hydrogen-bond donation compared to the top compounds. The main risk is the diminished HBD/TPSA profile, which may weaken CO2 capture kinetics and solubility."
+  },
+  {
+   "smiles": "COC(=O)C(N)CNCCO",
+   "name": "C6H14N2O3",
+   "rationale": "",
+   "origin": "mutation",
+   "descriptors": {
+    "formula": "C6H14N2O3",
+    "atoms": 11,
+    "heavy_atoms": 11,
+    "values": {
+     "molwt": 162.2,
+     "logp": -1.93,
+     "tpsa": 84.58,
+     "hbd": 3.0,
+     "hba": 5.0,
+     "rotb": 5.0,
+     "rings": 0.0,
+     "arom_rings": 0.0,
+     "fsp3": 0.83,
+     "heavy": 11.0,
+     "mr": 39.95,
+     "sa": 2.83,
+     "qed": 0.324
+    },
+    "alerts": {
+     "BRENK": [
+      "Aliphatic_long_chain"
+     ]
+    },
+    "alert_count": 1
+   },
+   "dft": null,
+   "scoring": {
+    "score": 0.703,
+    "targets": [
+     {
+      "key": "molwt",
+      "label": "Molecular weight",
+      "unit": "g/mol",
+      "source": "rdkit",
+      "aim": "min",
+      "weight": 1.0,
+      "value": 162.189,
+      "desirability": 0.4391
+     },
+     {
+      "key": "hba",
+      "label": "Hydrogen-bond acceptors",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "max",
+      "weight": 1.5,
+      "value": 5.0,
+      "desirability": 0.75
+     },
+     {
+      "key": "logp",
+      "label": "logP (lipophilicity)",
+      "unit": "",
+      "source": "rdkit",
+      "aim": "min",
+      "weight": 1.0,
+      "value": -1.931,
+      "desirability": 0.8219
+     },
+     {
+      "key": "tpsa",
+      "label": "Topological polar surface area",
+      "unit": "A^2",
+      "source": "rdkit",
+      "aim": "max",
+      "weight": 0.8,
+      "value": 84.58,
+      "desirability": 0.9226
+     }
+    ],
+    "blocking": [],
+    "measured": false,
+    "scored": true
+   },
+   "qualified": true,
+   "discussion": "With the fewest rotatable bonds (5) and a low MW of 162.2, this ester-containing amine is attractive from a viscosity perspective and scores 0.703. However, it also has the least negative logP (-1.93) and the lowest HBD count (3) in the set, so its aqueous solubility and hydrogen-bond donor capacity are the weakest here. The main risk is that the ester may be hydrolytically unstable in an aqueous capture solvent, and the low HBD number could limit the formation of stable carbamate species."
+  }
+ ],
+ "rejected": 0,
+ "generated": 77,
+ "dft_ran": 1,
+ "dft_cached": 0,
+ "generations": 1,
+ "origins": {
+  "seed": 6,
+  "model": 6,
+  "mutation": 64,
+  "assembly": 1
+ },
+ "model_used": "sensenova-6.8-flash-lite",
+ "model_notes": [],
+ "seconds": 144.52,
+ "targets": [
+  {
+   "key": "molwt",
+   "aim": "min",
+   "weight": 1.0,
+   "low": 50.0,
+   "high": 250.0,
+   "value": null,
+   "label": "Molecular weight"
+  },
+  {
+   "key": "hba",
+   "aim": "max",
+   "weight": 1.5,
+   "low": 2.0,
+   "high": 6.0,
+   "value": null,
+   "label": "Hydrogen-bond acceptors"
+  },
+  {
+   "key": "logp",
+   "aim": "min",
+   "weight": 1.0,
+   "low": -3.0,
+   "high": 3.0,
+   "value": null,
+   "label": "logP (lipophilicity)"
+  },
+  {
+   "key": "tpsa",
+   "aim": "max",
+   "weight": 0.8,
+   "low": 20.0,
+   "high": 90.0,
+   "value": null,
+   "label": "Topological polar surface area"
+  }
+ ],
+ "qualified": 77,
+ "requirements": [
+  "[NH1,H2]"
+ ],
+ "unmet_requirements": [],
+ "rejection_reasons": {},
+ "quality_checks": {
+  "sa_score": true,
+  "qed": true,
+  "alerts": true
+ }
+}

@@ -1,0 +1,1741 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChatDFT 审计 · 第 19 轮 — 精度台账，以及「宽到无法失败的容差」</title>
+<style>
+  :root {
+    --ink: #1b1f24; --muted: #5b6570; --line: #e2e6ea; --bg: #ffffff;
+    --soft: #f6f8fa; --warn: #9a5b00; --warnbg: #fdf3e3;
+    --ok: #1a7f37; --okbg: #eaf6ec; --bad: #b42318; --badbg: #fdeceb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.65 -apple-system, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", Roboto, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 28px 80px; }
+  h1 { font-size: 27px; margin: 0 0 6px; letter-spacing: -.2px; }
+  .sub { color: var(--muted); margin: 0 0 34px; font-size: 14px; }
+  h2 { font-size: 19px; margin: 42px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 26px 0 8px; }
+  p { margin: 10px 0; }
+  code { background: var(--soft); padding: 1px 5px; border-radius: 4px;
+    font-family: "SFMono-Regular", Consolas, monospace; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0;
+    font-size: 14px; }
+  th, td { text-align: left; padding: 9px 11px; border: 1px solid var(--line);
+    vertical-align: top; }
+  th { background: var(--soft); font-weight: 600; }
+  td.n { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    white-space: nowrap; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 12px; font-weight: 600; }
+  .t-ok { background: var(--okbg); color: var(--ok); }
+  .t-bad { background: var(--badbg); color: var(--bad); }
+  .t-warn { background: var(--warnbg); color: var(--warn); }
+  .note { background: var(--warnbg); border-left: 3px solid #f0c99a;
+    padding: 10px 14px; margin: 16px 0; font-size: 14px; }
+  .quote { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    background: var(--soft); border: 1px solid var(--line); border-radius: 5px;
+    padding: 11px 13px; margin: 14px 0; white-space: pre; overflow-x: auto; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 5px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>ChatDFT 审计 · 第 19 轮</h1>
+<p class="sub">精度台账，以及「宽到无法失败的容差」 ·
+⁷⁷Se 从「还没做」到「做不了」，十二个位移里的八个 ·
+这个软件没有 AI（用户是对的）· 十二位移表从散文变成数据 ·
+参考物缓存第一次带上代码版本 · 三个理由句从硬编码副本改成占位符渲染 ·
+六次「仪器说谎」：门禁套件在测别人的服务器、探针比到孤儿缓存条目、
+失败消息怪产品、变异台从没调用过断言、审计报告按命名习惯编出一条待办、
+我写来证明断言的三条变异里有一条什么都没守护 ·
+2026-09-17 → 09-18</p>
+
+<p>本轮从一个上一轮末尾自己记下的待办开始：<strong>⁷⁷Se 的参考化合物</strong>。
+它在待办清单上的原文是「既非不可能、也还没做」——基组里有硒，分子参考物
+（CH₃)₂Se 算得出来，只是还没做。</p>
+
+<p>查下去之后，这个问题的形状换了三次。每一次都让上一个问题变得无关紧要：</p>
+
+<ol>
+  <li><strong>该选哪个几何？</strong> —— 量出来的答案是可以量，于是选了微波结构。</li>
+  <li><strong>该不该报 ⁷⁷Se 位移？</strong> —— 不该。这个方法根本产生不出 ⁷⁷Se 位移。</li>
+  <li><strong>那其它核呢？</strong> —— 整个产品的精度声明<strong>从未被任何门禁复算过</strong>。</li>
+  <li><strong>清单上还剩一个待办（²H），它也是真的待办吗？</strong> —— 不是。
+    ²H 的理由记错了问题，而且 SMILES 路径把氘<strong>静默换成了氢</strong>。</li>
+</ol>
+
+<h2>缺陷 1：⁷⁷Se 不是「选哪个几何」，是「做不了」 <span class="tag t-bad">严重</span></h2>
+
+<p>第一个问题本身是合理的，而且是可以回答的。参考化合物的几何决定了整条标尺的
+零点，而 (CH₃)₂Se 有两个都站得住脚的结构：本程序自己的 B3LYP/6-31G* 驻点
+（Se–C 1.9473 Å、C–Se–C 92.22°），和微波实验结构（Se–C 1.943 Å、
+C–Se–C 96.2°，Beecher, <em>J. Mol. Spectrosc.</em> <strong>21</strong>, 414
+(1966)）。两者相差 <strong>1.354 au = 72.10 ppm</strong>。</p>
+
+<p>要判断这个差值是不是真的可分辨，得先知道有限差分的噪声底。probe_se4 在
+dB = 3×10⁻⁴ / 1×10⁻⁴ / 6×10⁻⁵ 三点上测 (CH₃)₂Se 的 σ<sub>iso</sub>(⁷⁷Se)，
+散布 <strong>0.0005 au = 0.027 ppm</strong>。噪声底比几何效应小 2700 倍，
+所以几何选择是一次真实测量，不是数值噪声。按模块自己的惯例（六个参考物
+全是实验结构，没有一个是 DFT 驻点），选微波结构。</p>
+
+<p>到这里本该结束。但量参考物的屏蔽时顺手量了一下样品，于是第二个问题出现了：
+把参考物<strong>两个甲基都换成氢</strong>——Me₂Se → H₂Se，最小分子里能做出的
+最大结构变化——方法的<strong>全部</strong>响应是：</p>
+
+<div class="quote">σ(77Se)   Me2Se   2121.16 ppm
+          H2Se    2222.54 ppm
+          ---------------
+          差       101.38 ppm
+
+77Se 化学位移量程（相对 Me2Se，HUJI 核素表）  3000 ppm  (-1000 .. 2000)
+方法覆盖量程                                    3.4 %</div>
+
+<p>一个把两个甲基换成氢的变化只让屏蔽移动 101 ppm 的方法，在一个 3000 ppm
+宽的标尺上，产出的是<strong>由几何选择主导</strong>的数字：参考物自身在两个
+可辩护几何间移动 72.10 ppm，甲基构象再动 8.37 ppm。也就是说，用户读到的
+「位移」里，最大的两项贡献是程序自己任意做的几何决定。</p>
+
+<div class="note"><strong>结论：</strong>⁷⁷Se 保留绝对屏蔽，<strong>不给化学
+位移</strong>。理由带着上面三个数字写进 <code>SCALE_CHECK["Se"]</code>，并被
+门禁绑定——方法哪天变好，门禁会变红，抑制必须被<em>重新决定</em>而不是被继承。</div>
+
+<h3>这一段里的两次测量装置缺陷</h3>
+
+<p>值得单独记下来，因为它们都伪装成了方法缺陷：</p>
+
+<ul>
+  <li><strong>单位。</strong><code>shielding_tensor()</code> 返回 <em>atomic
+  units</em>，<code>reference_shieldings()</code> 才是乘 53.251355 的地方。
+  探针把 au 当 ppm 打印，于是每个绝对值小 53.25 倍。比值不受影响（公因子
+  抵消），所以<strong>所有结论方向都对，所有记录数字都错</strong>——probe_se6
+  当时报「差 1.9 ppm」，真值是 101.4 ppm。</li>
+  <li><strong>几何。</strong>probe_se7 用 <code>_perp([1,0,0])</code> 搭 CH₃F，
+  第二个基向量落在 (0,0,−1)，与轴 <strong>平行</strong>而非垂直，一个氢到碳
+  1.2656 Å（应 1.095）。σ(¹⁹F) 因此偏了 1165 ppm，<strong>读起来像这个方法把
+  氟标尺搞反了</strong>。</li>
+</ul>
+
+<p>修法：探针乘 <code>nmr.PPM</code>；<code>_perp_frame</code> 里加三条
+<code>assert</code> 检查正交归一；CH₃F 改用 C₃ᵥ 关系
+<code>cos²θ = (2cos∠ + 1)/3</code>。</p>
+
+<h2>缺陷 2：六个核的精度，从未被任何门禁复算过 <span class="tag t-bad">严重</span></h2>
+
+<p>第二个问题的副产品是：程序为 ¹H、¹³C、¹⁴N、¹⁷O、¹⁹F、²⁹Si、³¹P、⁷⁷Se
+八个核打印位移，而<strong>只有 ¹H 和 ¹³C 的精度被量过</strong>。其余六个
+核的数字印在用户的图上，没有任何东西检查过它们对不对。量出来是：</p>
+
+<table>
+  <thead><tr><th>核</th><th>参考</th><th>样品</th><th>算出</th><th>实验</th>
+    <th>判定</th></tr></thead>
+  <tbody>
+    <tr><td>¹H</td><td>TMS</td><td>CH₄</td><td class="n">+0.66</td>
+      <td class="n">+0.23</td><td><span class="tag t-ok">复现</span></td></tr>
+    <tr><td>¹³C</td><td>TMS</td><td>CH₄</td><td class="n">−0.21</td>
+      <td class="n">−2.30</td><td><span class="tag t-ok">复现</span></td></tr>
+    <tr><td>¹⁴N</td><td>NH₃</td><td>CH₃NO₂</td><td class="n">+472.45</td>
+      <td class="n">+380.20</td><td><span class="tag t-warn">同一标尺，高 24 %</span></td></tr>
+    <tr><td>¹⁹F</td><td>CFCl₃</td><td>CH₃F</td><td class="n">−212.27</td>
+      <td class="n">−271.90</td><td><span class="tag t-warn">同一标尺，低 22 %</span></td></tr>
+    <tr><td>⁷⁷Se</td><td>(CH₃)₂Se</td><td>H₂Se</td><td class="n">−101.38</td>
+      <td class="n">—</td><td><span class="tag t-bad">不是 ⁷⁷Se 位移</span></td></tr>
+  </tbody>
+</table>
+
+<p>¹⁹F 这一条尤其值得看：算出的 212 ppm 与实验的 272 ppm 差 22 %，但氟甲烷
+整个系列 <strong>顺序完全正确</strong>，209.6 ppm 的量程算出 183.9 ppm。
+也就是说方法<strong>携带</strong>氟位移信息，偏差在幅度上（参考物或标度），
+不在定性上。这与 ⁷⁷Se 是<em>不同</em>的失败，因此记在不同的地方。</p>
+
+<h3>修法：把精度从散文变成数据</h3>
+
+<p>新增 <code>SCALE_CHECK</code>（5 个核，实测）与 <code>SCALE_UNMEASURED</code>
+（3 个核，¹⁷O / ²⁹Si / ³¹P，记为缺口）。两者<strong>恰好划分</strong>
+<code>REFERENCE_FOR</code> 的 8 个核，契约断言这一点，所以给一个核加参考物
+就必须填进其中一张表。</p>
+
+<p><code>SCALE_UNMEASURED</code> 里<strong>刻意不含数字</strong>，理由写在注释里：
+一个没有数字的理由不会腐烂。这与下面的缺陷 3 是同一课。</p>
+
+<p>新增独立门禁 <code>backend/check_shift_scales.py</code>（已加入
+<code>backend/gates.py</code> 的 <code>GATES</code>）：把台账每一条<strong>重算
+一遍</strong>，并<strong>重判 verdict</strong>——<code>usable</code> 的必须在
+自己的容差内，<code>unusable</code> 的必须由记录在案的数字支撑（响应小于量程的
+十分之一，且几何散布与响应同量级）。一个变好的方法<strong>应该</strong>让这道
+门禁变红。</p>
+
+<h2>缺陷 3：容差宽到无法失败 <span class="tag t-bad">严重</span></h2>
+
+<p>台账给 ¹H 的容差是 2.5 ppm。这个数字不是量出来的，是<strong>继承</strong>来的：
+模块 docstring 那张十二位移表用<strong>同一个</strong> 2.5 ppm 带子覆盖 ¹H 和
+¹³C。</p>
+
+<p>问题在于 ¹H 的整个化学位移量程只有约 12 ppm。2.5 ppm 是它的<strong>五分之一</strong>。
+在那张表里，六个 ¹H 的误差是 0.197 / 0.425 / 0.270 / 0.337 / 0.406 / 0.682 ppm
+——<strong>全部通过，且是构造性通过</strong>。也就是说，「十二个里十个在 2.5 ppm
+内」这句话的全部判别力都在六个 ¹³C 上，¹H 那一半从来不可能失败。</p>
+
+<div class="note">这与第 18 轮记下的 Trap 30（实现无法失败的守卫）同族，但空洞在
+<strong>阈值</strong>里，不在谓词里——所以任何「谓词会不会触发」的测试都发现不了
+它。</div>
+
+<h3>修法：容差本身要可证伪</h3>
+
+<p>契约新增断言：<strong>一个 <code>usable</code> 条目的容差，必须不小于它被测量
+时的误差，且不大于该误差的三倍</strong>。¹H 的容差因此从 2.5 改成 1.0 ppm
+（实测误差 0.43 ppm 的 2.33 倍）。改完四个可用核的倍数：</p>
+
+<table>
+  <thead><tr><th>核</th><th>容差</th><th>实测误差</th><th>倍数</th><th>判定</th></tr></thead>
+  <tbody>
+    <tr><td>¹³C</td><td class="n">2.50</td><td class="n">2.09</td><td class="n">1.20×</td><td>紧，有牙</td></tr>
+    <tr><td>¹⁹F</td><td class="n">80.0</td><td class="n">59.63</td><td class="n">1.34×</td><td>紧，有牙</td></tr>
+    <tr><td>¹⁴N</td><td class="n">120.0</td><td class="n">92.25</td><td class="n">1.30×</td><td>紧，有牙</td></tr>
+    <tr><td>¹H</td><td class="n">1.00</td><td class="n">0.43</td><td class="n">2.33×</td><td>改前 5.81×，无法失败</td></tr>
+  </tbody>
+</table>
+
+<p>新断言第一次跑就<strong>在当时的代码上报了错</strong>（H 5.8×），改完 1.0
+后转绿。变异体 N33 把 2.5 放回去，它再次开火——所以这条规则是被执行的，
+不是被期望的。</p>
+
+<h2>缺陷 4：我自己写下的注释，在同一个轮次里就腐烂了 <span class="tag t-warn">记录</span></h2>
+
+<p>本轮新增 <code>SCALE_CHECK</code> 时，我在它上方写了一段注释，里面抄了一份
+五行的实测表。门禁第一次跑完，对照一看：</p>
+
+<div class="quote">注释里写的   H +0.44   C -1.49   N +472.44   F -212.27   Se -101.39
+门禁量出的   H +0.66   C -0.21   N +472.45   F -212.27   Se -101.38
+                  ^^^^^^^^^^^^^^^^^^^^  五行里错了两行</div>
+
+<p>原因很直白：注释是照着探针那次运行抄的，而门禁随后走<strong>产品自己的代码
+路径</strong>（<code>reference_shieldings(use_cache=True)</code> + 库几何）又量了
+一遍。这与模块 docstring 那张十二位移表得的是同一种病，只是发作得更快——同一轮内。</p>
+
+<p>修法不是把数字改对，是<strong>删掉重复</strong>：注释只保留不会腐烂的 verdict
+列（「复现」／「同一标尺，高约四分之一」／「根本不是 ⁷⁷Se 位移」），数字只存在于
+<code>SCALE_CHECK</code> 一处，由门禁复算那一处。</p>
+
+<h3>顺着这条线又找到五处</h3>
+
+<p>既然「散文里的计数会腐烂」是本轮的病，就用它去搜了一遍：<code>fourteen</code>
+／<code>十四</code> 在源码与 README 里还有<strong>五处</strong>，全部是因为硒加了
+参考物而从「十四个无参考核」变成「十三个」之后<strong>没有人改</strong>的：</p>
+
+<table>
+  <thead><tr><th>位置</th><th>原文</th><th>实际</th></tr></thead>
+  <tbody>
+    <tr><td class="n">contract.py</td><td>all fourteen elements that have no reference</td><td>十三</td></tr>
+    <tr><td class="n">contract.py</td><td>The list of fourteen elements</td><td>十三</td></tr>
+    <tr><td class="n">contract.py</td><td>the five that are on the primary standard</td><td>六个（八个中）</td></tr>
+    <tr><td class="n">mutate_nmr.py</td><td>for all fourteen of them</td><td>十三</td></tr>
+    <tr><td class="n">engine/nmr.py</td><td>fourteen element symbols copied forward</td><td>十三</td></tr>
+  </tbody>
+</table>
+
+<p>修法统一为<strong>不写计数</strong>：<strong>清单本身就是计数</strong>。契约注释
+里直接写明理由——「这个计数已经腐烂过两次，因为 ⁷⁷Se 拿到参考物时离开了这张表」。
+README 里我刚写下的「Thirteen」也一并删掉，因为它会是第六处。</p>
+
+<div class="note">注意这条线的形状：<strong>加一个参考物</strong>（一个功能改进）
+<strong>让五处注释同时变成错的</strong>。没有任何门禁会因此变红，因为腐烂发生在
+散文里。这就是「散文里的数字不能信」不是修辞而是工程判断的原因。</div>
+
+<h2>缺陷 5：十二个位移里的八个，而不是十个 <span class="tag t-bad">严重</span></h2>
+
+<p>顺着上面那条线去查模块 docstring，那里有一句精度声明：</p>
+
+<div class="quote">"Ten of the twelve shifts are inside 2.5 ppm."   （归因于 probe_nmr20）</div>
+
+<p>没有任何门禁复算过它。probe_se10 在<strong>当前</strong>的分子库上重测：</p>
+
+<div class="quote">molecule   nuc   docstring   measured    drift    exptl  err now
+acetylene  H         1.833      1.997   +0.164     1.80   +0.197
+methane    H         0.442      0.655   +0.213     0.23   +0.425
+ethane     H         1.030      1.130   +0.100     0.86   +0.270
+ethylene   H         5.732      5.737   +0.005     5.40   +0.337
+benzene    H         7.627      7.666   +0.039     7.26   +0.406
+methane    C        -1.487     -0.205   +1.282    -2.30   +2.095
+ethane     C         7.597      8.328   +0.731     5.70   +2.628
+benzene    C       126.309    126.408   +0.099   128.50   -2.092
+ethylene   C       121.091    120.564   -0.527   123.50   -2.936
+acetylene  C        65.785     66.175   +0.390    71.90   -5.725
+methanol   H         0.340      2.668   +2.328     3.35   -0.682
+methanol   C        29.488     46.457  +16.969    49.50   -3.043
+
+在 2.5 ppm 内的：8 / 12
+最大漂移：甲醇的碳，+16.969 ppm</div>
+
+<p>根因是第 17 轮重新推导过库几何（62 条曾被统一标成
+<code>MMFF94 (RDKit ETKDGv3)</code>，而按各自 SMILES 重嵌入只复现 25 条）。
+甲醇的碳因此从 29.488 漂到 46.457。也就是说：<strong>一条关于产品精度的声明，
+一直在描述一个已经不存在的产品，而且没有任何东西说出来。</strong></p>
+
+<p>docstring 当时被改写为上面这张带 drift 列的五列表，并明写结论已经从
+「十个」变成「八个」。什么在重测中幸存：¹H 全量程好到 0.7 ppm，¹³C 好到 3 ppm
+（乙炔的碳除外，5.7 ppm，三键上的已知弱点），<strong>顺序处处正确</strong>，
+十二个的平均绝对误差 1.89 ppm。<strong>最后这一句后来被证明是错的，见下。</strong></p>
+
+<h3>这条线在第四遍才走完：表从散文变成数据</h3>
+
+<p>上面那张五列表仍然是<strong>散文</strong>。它比「十个」准确，但它依然是
+「一次测量写下来、然后没人复算」的同一个东西——只不过这次写在表格里。
+真正把它钉住需要三件事，这一轮把它们都做了：</p>
+
+<ol>
+  <li><strong>行变成数据</strong>：<code>backend.engine.nmr.SHIFT_LEDGER</code>
+    十二行，每行 <code>(分子, 几何键, 计算值, 实验值)</code>。</li>
+  <li><strong>派生量不再写下来</strong>：在带内的行数、每个核的最差误差、
+    平均绝对误差，全部由门禁 <code>check_shift_scales</code> <strong>打印</strong>。
+    写下来的那一刻就会开始腐烂——这一轮抓到了第三个：那个
+    「平均绝对误差 1.89 ppm」实测是 <strong>1.736</strong>。
+    修法是把这句话<strong>删掉</strong>而不是改成 1.736：改正一个派生量只是
+    把同一个时钟重新拨一遍。</li>
+  <li><strong>容差变成关于整个核的声明</strong>：原先 ¹³C 的 2.5 ppm 只被甲烷
+    量过（误差 2.09），而甲醇一直是 3.04——<strong>它在过去每一轮都在证伪这个容差，
+    而没有任何东西把这两个数放在一起比过</strong>。容差改为 3.2，乙炔的碳 5.73
+    成为<strong>具名例外</strong>，具名在数据里（<code>SHIFT_LEDGER["C"]["exceptions"]</code>），
+    而契约断言「例外必须真的超容差」——一个陈旧的例外标签会藏住一行已经通过的数字，
+    让那条容差<strong>失去约束</strong>。</li>
+</ol>
+
+<div class="quote">$ python -m backend.check_shift_scales
+  ledger/C   methane    computed    -0.205  recorded    -0.205  exptl    -2.30  error  +2.095
+  ledger/C   acetylene  computed   +66.175  recorded   +66.175  exptl   +71.90  error  -5.725
+  ledger/C   6 rows, 2 inside 2.5 ppm, worst 5.725 (acetylene), mean 3.087,
+             worst inlier 3.043 (methanol), 1 exception(s) ['acetylene']
+  ledger/H   6 rows, 6 inside 2.5 ppm, worst 0.682 (methanol), mean 0.386
+=== PASS: drift check falsified; 5 of 5 scale entries, 3 of 3 gaps
+    and 12 of 12 shift rows recomputed and consistent ===</div>
+
+<p>注意第二行：<strong>「2 inside 2.5 ppm」</strong>。旧容差 2.5 下的这个数字，
+是门禁自己算出来并打印的，而它显然不成立。门禁在这里不是「复算一遍确认没错」，
+它是<strong>把不成立的东西打印出来</strong>。</p>
+
+<p>容差规则只有一处实现（<code>nmr.tolerance_rule</code>，纯函数、不读表），
+两个调用点：契约用<strong>记录值</strong>查（零 SCF，快），门禁用<strong>重算值</strong>查。
+于是「容差写错了」和「台账漂移了」是两种不同的失败，而不是同一种。
+规则本身每次都被证伪六次：太紧必须被拒、太松必须被拒、陈旧例外必须被报、
+全例外必须被报、空台账必须被报、只有「正好覆盖」必须通过。</p>
+
+<h3>改一个数字，让一条变异体静默死掉</h3>
+
+<p>把 ¹³C 的容差从 2.5 改成 3.2 之后，<code>mutate_nmr</code> 里那条
+<code>N34 scale-C-tolerance-deflated</code> 的目标文本就再也匹配不上了——
+它会报 <code>mutation not applicable</code>，而这句话在日志里读起来像
+「这条断言这一轮没被覆盖」，不像「这条变异体已经死了」。
+这正是第 19 轮已经写过一次的教训（N37 因条目字段重构而失效），
+<strong>只是换了一个方向又发生了一次</strong>：变异体引用了它想删掉的东西，
+那东西一改它就坏。</p>
+
+<p>修法不是把 N34 的目标改回去，而是让这件事<strong>在跑任何 SCF 之前就被说出来</strong>：
+新增 <code>backend.mutate_common</code>，五个变异台（NMR、library、planner、
+Raman、UV）共用同一个预检，它对每一条 <code>(old, new)</code> 先做「还在不在源码里」
+和「改完还能不能编译」两件事，失败就拒绝运行、返回 1。N34 被重新指向 ¹⁹F
+（误差 59.6 ppm，20 ppm 的容差不可能成立）。</p>
+
+<p>预检自己也有自检：每次都被喂三条<strong>已知答案</strong>的合成变异体
+（能应用、目标已消失、改完不能编译），<strong>两个方向都必须触发</strong>——
+否则一个永远返回空列表的预检，和一个正确的预检，从外面看完全一样。</p>
+
+<div class="quote">PREFLIGHT (NMR): self-test fired on both a missing target and a syntax
+error; all 59 mutations apply to the current source and parse</div>
+
+<p>副作用是门禁变快了。十二行台账原先每个核各算一遍六个分子，
+苯在 6-31G* 下是 96 个基函数、13 分钟里它一个人占了 12.5 分钟；
+现在同一个分子的屏蔽张量一次运行内只算一次（模块级 memo，随进程结束消失，
+不是磁盘缓存），并且日志里印的是 <code>tensor reused from this run</code>
+而不是 <code>0.0 s</code>——「没重算」和「算得很快」是两句不同的话。</p>
+
+<h2>缺陷 6：一条断言从未运行过，而且它的覆盖取决于机器有多少空闲内存
+  <span class="tag t-bad">严重</span></h2>
+
+<p>变异台连续两轮报同一句：</p>
+
+<div class="quote">SKIPPED N18 unreferenced-hidden: thiophene payload unavailable</div>
+
+<p>跳过是诚实的——它比崩溃好（崩溃会带走其余变异，读起来像「什么都没抓到」，
+真相是「什么都没跑」）。但<strong>跳过不是覆盖</strong>：N18 守卫的那条断言
+（「没有参考的核必须被点名，而不是从表里消失」）在这台机器上从未运行过，
+而且<strong>它跑不跑取决于当前有多少空闲内存</strong>——thiophene 在 6-31G*
+是 nao = 82，内存守卫把它估到约 3.0 GB，机器只剩约 1.4 GB 就拒绝。</p>
+
+<p>修法：加一个更便宜的载体。库里有 <code>methanethiol</code>（CH₃SH，6 原子），
+带着<strong>同一个</strong>无参考核（硫），代价是几分之一：</p>
+
+<div class="quote">(substituted methanethiol for thiophene, refused by the memory guard:
+ thiophene: NMR at 6-31g* needs about 3.0 GB for this molecule (82 basi)
+(methanethiol payload built in 6.7 s: unreferenced [])
+  -> 2 failure(s) raised</div>
+
+<p>替换是<strong>打印出来的</strong>，因为一个没人提到的回退正是门禁最后测了
+别的东西而不自知的方式。</p>
+
+<h3>同一个缺陷，在产品的门禁里更严重</h3>
+
+<p>修完变异台，重跑 5 道门禁，<code>contract</code> 红了，报的是同一件事——但它
+不是跳过，是<strong>硬失败</strong>：</p>
+
+<div class="quote">[FAIL] a nucleus with no reference is named rather than dropped
+  - nmrmissing: the thiophene job ended failed -- NMR at 6-31g* needs about
+    3.0 GB for this molecule (82 basis functions) but only 2.4 GB of physical
+    memory is free right now.</div>
+
+<p>契约把分子名<strong>硬编码</strong>成 thiophene，并把「作业没跑完」当成契约
+违约。于是这道门禁的<strong>红绿取决于机器此刻有多少空闲内存</strong>——而一道
+因为环境原因变红的门禁，正是训练读者忽略它的方式。（第 18 轮修内存常数时反而
+让拒绝更容易发生，因为常数从低 23% 改对了：2.5 GB → 3.0 GB。）</p>
+
+<p>修法两点，都在 <code>contract.py</code>：</p>
+
+<ol>
+  <li>载体按顺序试，<strong>只有因内存被拒才换下一个</strong>。其它失败照旧是违约
+    并立即停止——否则一个真实缺陷会被改标签成「内存不够」，然后在另一个不复现
+    该缺陷的分子上悄悄重试通过。</li>
+  <li>如果所有载体都因内存被拒，报<strong>失败</strong>而不是跳过，并在消息里
+    说清这是环境限制：「一条悄悄停止运行的断言，与一条通过的断言无法区分」。</li>
+</ol>
+
+<p>载体清单只定义在 <code>contract.UNREFERENCED_CARRIERS</code> 一处，
+<code>mutate_nmr</code> 从那里取——<strong>两份本该相等的清单，与两个差一个常数
+的约定是同一种缺陷</strong>。</p>
+
+<h3>「可见性修复」本身不可见</h3>
+
+<p>第一版把替换写成单独一行 <code>print</code>。重跑之后日志里<strong>找不到
+那一行</strong>——门禁运行器只保留判定行（<code>[PASS]</code>／
+<code>[FAIL]</code>），其余一律当作 SCF 迭代那样的噪声丢掉。于是「打印替换」
+这个修复<strong>执行了但看不见</strong>，读 summary 的人无从知道这次检查跑的是
+噻吩还是替代物。</p>
+
+<p>修法：把载体写进<strong>判定行本身</strong>：</p>
+
+<div class="quote">[PASS] a nucleus with no reference is named rather than dropped
+       (carrier: methanethiol, substituted for thiophene refused for memory)</div>
+
+<p>这条教训与 Trap 42（判定正则与门禁对「什么是一次检查」的理解不一致）同族：
+<strong>想让一件事可见，得把它放进被计数的那个字符串里</strong>，而不是放在它
+旁边。</p>
+
+<h2>缺陷 7：²H 的理由记错了问题，而且 SMILES 路径把氘<strong>静默换成了氢</strong>
+  <span class="tag t-bad">严重</span></h2>
+
+<p>处理完硒之后，清单上只剩一个「可以做但还没做」的参考：氘。记录的理由是</p>
+
+<div class="quote">"D": "no reference is provided yet; TMS-d12 would be computable here"</div>
+
+<p>与硒那条一样，这也是个 to-do 便签。所以在照做之前先问一句：参考物真的是第一个
+问题吗？答案是<strong>不是</strong>，而且真正的问题比缺参考物严重得多。</p>
+
+<h3>先量：氘能不能进入一个作业</h3>
+
+<p><code>NUCLEI</code> 表里有 ²H（spin 1，γ = 6.5359），<code>NO_REFERENCE_WHY</code>
+里有 D——但把两条入口都试一遍：</p>
+
+<div class="quote">SMILES  [2H]C([2H])([2H])[2H]  ->  CH4        symbols=['C', 'H']
+XYZ     C + 4×D                  ->  KeyError "Element 'D' is not supported by ChatDFT."
+name    deuteromethane           ->  not in the molecule library</div>
+
+<p>两条路都不是「缺参考物」：</p>
+
+<ul>
+  <li><strong>SMILES 路</strong>：RDKit 把同位素标号放在 <code>GetIsotope()</code> 里，
+    而     <code>GetSymbol()</code> 返回的是纯元素 <code>"H"</code>。代码取的是后者
+    （<code>molecule.py</code> 的 <code>from_smiles</code>；行号不写在这里，理由
+    见缺陷 4），所以 <code>[2H]C([2H])([2H])[2H]</code>
+    变成 <code>CH4</code>——<strong>用户要 CD₄，拿到的是甲烷的数，而且没有一个字
+    说明</strong>。这是所有可能结果里最坏的一种：数字是真的，但它回答的是另一个
+    问题。</li>
+  <li><strong>XYZ 路</strong>：<code>_split_xyz</code> 保住了 <code>D</code>，
+    但 <code>elements</code> 表拒绝它——「Element 'D' is not supported by
+    ChatDFT.」</li>
+</ul>
+
+<p>也就是说：<strong>NMR 模块说 ²H 在基组里、算得出来；分子构建器说 D 根本不支持。
+两个模块对「这个程序里有没有氘」给出相反的回答。</strong>实测确认 D 是
+<code>NUCLEI</code> 里唯一一个构建器造不出来的符号（21 个里 20 个可造）。</p>
+
+<h3>为什么不能「顺手支持一下」</h3>
+
+<p>支持氘看起来只是加个元素。但质量来自 <code>elements.get(symbol).mass</code>，
+屏蔽在<strong>clamped-nucleus</strong> 层面计算——在那个层面 ²H 与 ¹H 是<em>同一个
+电子问题</em>。所以一个「氘谱」会是一张<strong>贴着氘标签的氢谱</strong>，
+一个「CD₄ 红外谱」会是甲烷的（C–H 伸缩约 3000 cm⁻¹ 的位置是 C–D 伸缩约
+2200 cm⁻¹）。这正是本产品在 ¹⁵N／³¹P 上一直避免的失败：<strong>一个数字穿着另一个
+标尺的名字</strong>。所以选择是拒绝，不是近似。</p>
+
+<h3>修法</h3>
+
+<ol>
+  <li><strong>停止静默替换</strong>：<code>from_smiles</code> 现在检查
+    <code>GetIsotope() != 0</code>，发现同位素标号就拒绝，并在消息里说明为什么
+    （质量数会改变振动频率；对氘来说它是一个不同的核，有自己的标尺和参考物）。
+    实测：<code>[2H]</code>、<code>[13C]</code> 都被拒，<code>CCO</code> 不受影响；
+    库里 65 条没有一条带同位素标号。</li>
+  <li><strong>把理由记在正确的表里</strong>：新增 <code>UNBUILDABLE_NUCLEI</code>，
+    与「没有参考物」分开——两者的<em>下一步工作不同</em>：一个要化合物，一个要
+    元素先存在。同时修正 <code>NO_REFERENCE_WHY</code> 上方那句把 D 归进
+    「在基组里但被排除」的分类错误（D 不在基组里，因为 D 不是这个构建器能造的
+    元素）。</li>
+  <li><strong>一个理由只写一处</strong>：<code>NO_REFERENCE_WHY["D"]</code> 直接
+    引用 <code>UNBUILDABLE_NUCLEI["D"]</code>，契约断言两者相等——用户读到的理由
+    和结构性理由不能是两个故事。</li>
+</ol>
+
+<h3>契约断言</h3>
+
+<ul>
+  <li><code>set(UNBUILDABLE_NUCLEI) == set(NUCLEI) − 可构建元素</code>，<strong>恰好
+    相等</strong>（防止「某核变得可算但记录没更新」和「记录过期」两个方向）；</li>
+  <li>每条记录的理由非空；</li>
+  <li>每个不可构建的核必须出现在 <code>NO_REFERENCE_WHY</code> 里（用户必须被告知）；</li>
+  <li>两处的理由字符串必须<strong>完全相同</strong>。</li>
+</ul>
+
+<p>变异体 <strong>N41 就是那个确切的回归</strong>——把旧句子放回去——只触发预期的
+那一条失败。N40（给一个<em>可构建</em>的元素加记录）触发集合断言与相等断言两条。
+「理由为空」那一条无法用文件变异触发（因为两处是同一个字符串，清空一个就清空
+两个，相等性仍然成立），所以用直接调用单独证明：清空 → 1 条失败，还原 → 0 条。</p>
+
+<h2>反转：三个「未测量」的核，从散文变成钉住的数据 <span class="tag t-warn">设计决定</span></h2>
+
+<p>上一版把 ¹⁷O／²⁹Si／³¹P 记成 <strong>纯散文</strong>（<code>Dict[str, str]</code>），
+理由写得很清楚：数字会腐烂，而模块 docstring 那张十二位移表刚刚腐烂过。这一轮把
+它改成了 <code>Dict[str, dict]</code>，每条带<strong>它针对的那一对</strong>与
+<strong>本程序算出的值</strong>。</p>
+
+<p>理由是：那个「数字会腐烂」的结论<strong>只对了一半</strong>。真正让十二位移表
+腐烂的不是「它是数字」，而是<strong>没有任何东西复算它</strong>——
+<code>SCALE_CHECK</code> 的数字没有腐烂，因为 <code>check_shift_scales</code>
+每次运行都重算一遍。所以三个缺口的计算值现在以同样方式被钉住，而<strong>钉住的数字
+严格优于缺失的数字</strong>：等实验值真的到来时，计算侧已经是核实过的，而不是
+记住的。</p>
+
+<p>旧写法还有一个更实际的问题：它<strong>说不出哪一对</strong>。原文是「这里算过
+一对，但没有核实过的实验位移」。下一个读者无法知道：比的是哪个分子？方法到底有没有
+产生真实标尺？哪一个文献数字能把它关掉？——而这三个问题的答案<strong>不一样</strong>：</p>
+
+<table>
+  <thead><tr><th>核</th><th>配对</th><th>本程序算得</th><th>量程</th><th>这个缺口是什么</th></tr></thead>
+  <tbody>
+    <tr><td>²⁹Si</td><td>SiH₄ vs TMS</td><td class="n">−64.93 ppm</td>
+      <td class="n">519 ppm</td>
+      <td><strong>方法产生真实标尺</strong>：硅烷在 TMS 高场侧，与实验方向一致。
+      缺的是一个经核实的实验位移。</td></tr>
+    <tr><td>³¹P</td><td>CH₃PH₂ vs PH₃</td><td class="n">+66.41 ppm</td>
+      <td class="n">430 ppm</td>
+      <td><strong>方法产生真实标尺</strong>：每个甲基去屏蔽磷（PH₃ → CH₃PH₂
+      +66.41，CH₃PH₂ → (CH₃)₂PH 再 +40.93），与实验同序。缺的同样是一个经核实的
+      实验位移。</td></tr>
+    <tr><td>¹⁷O</td><td>H₂CO vs H₂O</td><td class="n">+716.94 ppm</td>
+      <td class="n">1100 ppm</td>
+      <td><strong>不是缺数字，是相态问题</strong>：IUPAC 主参考是<em>液态</em>水，
+      而 ¹⁷O 位移全在溶液里测、强烈依赖溶剂；本构建是气相。气相计算对比溶液测量
+      会把方法与溶剂混在一起——<strong>单靠一个文献数字无法让这个比较成立</strong>，
+      它需要气相标样或显式溶剂模型。</td></tr>
+  </tbody>
+</table>
+
+<p>这是一次<strong>刻意的反转</strong>，所以代价也要说清：这三个数字现在也会腐烂——
+除非门禁复算。所以 <code>check_shift_scales</code> 新增了 <code>check_unmeasured()</code>，
+逐条复算三个缺口的计算侧（带 = <code>max(2.0, |记录值| × 5%)</code>，并断言
+<code>|Δ| ≤ 量程</code>）。契约同时新增对这张表<strong>形状</strong>的断言：
+<code>why</code> 非空、参考名与产品一致、几何键与产品一致、<strong><code>computed_ppm</code>
+不得为 None</strong>（「未测」与「未算」需要不同的工作，一张句子表分不开）、
+<code>0 &lt; |记录值| ≤ 量程</code>。</p>
+
+<h3>改数据结构，会让钉住它的变异体失效</h3>
+
+<p>把表从字符串改成字典之后，变异体 <strong>N37</strong>（删掉一个未测条目）的替换
+串指向了一行已经不存在的代码，运行台报 <code>mutation not applicable</code>。
+<strong>运行台是对的</strong>——它没有静默放过——但这正是本轮的教训的另一种形态：
+<strong>一个变异体钉住的是「形状」而不只是「值」</strong>，所以改掉它下面的数据结构会
+静默地让证明失效，而变异体还留在清单里、看起来仍是覆盖。N37 已按新结构重写。</p>
+
+<h3>门禁自己的容差带，从来没被证伪过</h3>
+
+<p><code>check_shift_scales</code> 的漂移检查是「重算值与记录值相差不得超过带」。
+这条断言<strong>无法用文件变异体证明</strong>——诚实的证伪方式是把方法改到屏蔽真的
+移动，那是每次试验一个 SCF。而它的失效状态<strong>不可见</strong>：一条永远不开火的
+带，和一条工作正常的带，打印出来的都是同一行 PASS。</p>
+
+<p>所以把规则抽成了三个数的纯函数（<code>band_for</code>／<code>band_failures</code>），
+并让门禁<strong>每次运行都先证伪自己</strong>：</p>
+
+<ul>
+  <li>半条带 → 必须<strong>零</strong>失败（数值噪声要被容忍）；</li>
+  <li>1.5 条带 → 必须<strong>恰好一条</strong>失败，<strong>两个方向都试</strong>；</li>
+  <li>六个记录值（含 0.0 与 −2.3，即 2 ppm 地板生效的区间）上，带必须等于
+    <code>max(2.0, 5%)</code>；</li>
+  <li>台账与缺口的失败文案必须<strong>不同</strong>——后果不同：过期的台账条目作废一个
+    verdict，过期的缺口会让未来的对比拿错数字。</li>
+</ul>
+
+<p>证明本身也验证过能失败：把 <code>band_for</code> 换成常数 1e9 ppm → 报 <strong>9</strong>
+条问题；换成 1e-12 → <strong>8</strong> 条；把两句文案合并成一句 → <strong>1</strong> 条。
+它不花 SCF，所以折进了默认运行，并且<strong>「已证伪」这件事写进了被计数的判定行</strong>：
+<code>=== PASS: drift check falsified; 5 of 5 ledger entries and 3 of 3 gaps ... ===</code>
+——因为「便宜且总是运行」和「便宜且被悄悄跳过」的输出是一样的。</p>
+
+<h2>第三遍：理由文本里的数字，仍然没有任何东西复算 <span class="tag t-bad">严重</span></h2>
+
+<p>把三个缺口的计算值钉进表之后，我顺手检查了 <code>why</code> 这段用户会读到的
+文字，发现同一个缺陷以另一种形态还在：</p>
+
+<ul>
+  <li>²⁹Si 与 ³¹P 的说明<strong>把 <code>computed_ppm</code> 和 <code>range_ppm</code>
+    又抄了一遍</strong>（「silane 64.9 ppm … 519 ppm range」「PH₃ → CH₃PH₂ by 66.4
+    ppm … 430 ppm range」）。表里的数字由门禁复算，散文里的那份<strong>没有</strong>——
+    于是两处可以互相矛盾，而各自都「没错」。</li>
+  <li>³¹P 的说明还带一个<strong>第二步 +40.9 ppm</strong>，它连表里都没有，
+    纯粹是散文。</li>
+  <li>¹⁷O 的说明<strong>一个数字都没有</strong>——这本身是对的（障碍是相态，
+    verdict 不依赖那个数），但当时无法与「数字被不小心删掉了」区分。</li>
+</ul>
+
+<h3>修法：句子从表里插值，并且声明它引用哪些数</h3>
+
+<p><code>why</code> 现在带 <code>{computed:+.1f}</code>／<code>{range:.0f}</code>
+占位符，由 <code>gap_why(el)</code> 从条目自己的字段渲染。契约新增：</p>
+
+<ul>
+  <li><strong>不得把复算过的数写成字面量</strong>：对每个数值字段，四种格式
+    （<code>.0f</code>／<code>.1f</code>／<code>+.0f</code>／<code>+.1f</code>）
+    的字面量都不许出现在 <code>why</code> 里。</li>
+  <li><strong><code>reason_kind</code> 必须显式声明</strong>是
+    <code>"measurement"</code> 还是 <code>"argument"</code>；
+    前者必须引用 <code>computed</code>（「断言而不给数」正是这张表要拦的），
+    后者必须什么都不引用。这样 ¹⁷O 的沉默是<strong>决定</strong>，
+    不是<strong>遗漏</strong>——两者从外面看一模一样。</li>
+  <li><strong><code>why_quotes</code> 里点名的每个字段都必须有占位符</strong>，
+    且渲染后的文本必须真的带上那个数——占位符删掉了，断言就失败。</li>
+</ul>
+
+<p>³¹P 的第二步改成<strong>方向性声明</strong>：<code>"trend":
+[("dimethylphosphine", +1)]</code>。门禁复算这一步并断言<strong>符号正确</strong>，
+且<strong>幅度 ≥ 5 ppm</strong>——因为「每个甲基去屏蔽磷」这个声明可以被
+0.001 ppm 满足，而没有幅度的方向断言是一条无法失败的断言。实测这一步
+<strong>+40.93 ppm</strong>，与第一步同号。</p>
+
+<h3>同一个变异体，在同一轮里失效了两次</h3>
+
+<p>N37（删掉一个未测条目）先是因为表从字符串改成字典而失效；我按新结构重写之后，
+<strong>又因为给同一个条目加了两个字段而再次失效</strong>。两次运行台都报
+<code>mutation not applicable</code>——它没有静默放过，但两次都只有在<strong>真的跑
+一遍</strong>之后才发现。</p>
+
+<p>第二次的修法比第一次更彻底：不再引用条目里的任何字段，只改键名一行
+（<code>"Si": {</code> → <code>"O": {</code>，重复键后者生效，于是 <code>Si</code>
+从表里消失）。<strong>一个变异体如果引用它想删掉的东西，那东西一改它就会坏；
+依赖面越小，活得越久。</strong></p>
+
+<h2>门禁运行器：源码在运行期间被改动过，而输出里没有一句话 <span class="tag t-warn">记录</span></h2>
+
+<p>修上面这些的时候，我在一批 6 道门禁正在跑的时候改了
+<code>engine/nmr.py</code>。每道门禁是独立子进程、各自重新导入源码，
+所以<strong>前面的门禁测的是一个版本，后面的测的是另一个</strong>，
+而汇总对混合物给出了一个 PASS。那一批只能整批丢掉。</p>
+
+<p>变异台对这种危险有一道守卫（有服务器在 8000 端口监听就拒绝运行），
+但那守的是<strong>反向</strong>的危险。源码在只读它的运行期间被改动，
+此前<strong>完全没有守卫</strong>。现在 <code>backend/gates.py</code> 在运行前后
+各取一次源码指纹（<code>backend/**/*.py</code> 与 <code>frontend/static/js/app.js</code>
+的 sha256），不一致就在汇总里报
+<code>SOURCE CHANGED DURING THE RUN</code>、列出文件、并把整轮判为失败——
+因为「在源码冻结的前提下重跑」和「这里的 PASS 什么都说明不了」是两回事。</p>
+
+<p class="sub">附带发现：用 <code>TaskStop</code> 强杀门禁编排进程后，
+<strong>服务器子进程成了孤儿并继续监听 8000 端口</strong>，导致紧接着的变异台
+以 exit 2 拒绝运行。守卫正常工作，但「杀掉编排器不会杀掉服务器」本身值得记一笔。</p>
+
+<h2>缺陷 8：这个软件没有 AI —— 用户是对的，而状态页在说谎 <span class="tag t-bad">已修</span></h2>
+
+<p>用户连着问了两遍「没有 AI 功能吗」「没有 AI 吗！！！」。我第一反应是去问
+<code>GET /api/llm</code>，它回答：</p>
+
+<pre><code>{"config": {"base": "https://token.sensenova.cn/v1",
+           "model": "sensenova-6.8-flash-lite",
+           "models": ["deepseek-v4-flash", "sensenova-6.8-flash-lite"],
+           "latency": {"sensenova-6.8-flash-lite": 44.0, "deepseek-v4-flash": 32.6},
+           "configured": true, "key_hint": "sk-...pedO"},
+ "available": true}</code></pre>
+
+<p>看起来 AI 是活的。于是我去问真正执行规划的那条路：</p>
+
+<pre><code>POST /api/chat  {"message": "Compare the HOMO-LUMO gaps of benzene and pyridine"}
+-> elapsed 0.1s
+   planner = <strong>local</strong>
+   intent  = {"job_type": "compare", "molecule": "benzene", ...,
+              "confidence": 0.65, "notes": []}</code></pre>
+
+<p><strong>两个端点说的是两件事。</strong>聊天框里每一句话都是被正则表达式匹配的，
+一个语言模型都没碰过；而 <code>/api/llm</code> 说模型可用。用户看到的是前者，
+所以他问得完全正确。</p>
+
+<h3>为什么会有两个答案</h3>
+
+<p>同一个设置，两个读者。<code>GET /api/llm</code> 走
+<code>agent.llm.LLMClient</code>，它按「环境变量 → <code>data/llm.json</code>」
+解析；<code>POST /api/chat</code> 走 <code>agent.planner.LLMPlanner</code>，
+它<strong>只读环境变量</strong>。这个项目里
+<code>data/llm.json</code> 是存在的、里面是有 key 的，而环境变量是空的——
+于是客户端说「可用」，规划器说「没配置」，两个都对。</p>
+
+<p class="sub">两处都是「合理」的实现，所以没有任何一处看起来像缺陷。
+它们只是不读同一个东西。</p>
+
+<h3>同一条路上还埋着两件事，同样看不见</h3>
+
+<ol>
+  <li><strong>它读的是 <code>choices[0].message.content</code>。</strong>
+  这个端点背后的模型是推理模型：<code>content</code> 是 <code>null</code>，
+  答案放在 <code>reasoning_content</code> 里。<code>llm.py</code> 的
+  <code>_message_text</code> 专门处理了这个（文档里写着「used to be read as
+  'the model said nothing'」），而规划器写在它之前，从来没拿到这份处理。
+  所以<strong>即使环境变量配好了，它也会 TypeError 然后回退</strong>——
+  这条路径从来没有成功过一次。</li>
+  <li><strong>它的 schema 只列了 18 个作业类型里的 7 个。</strong>
+  原文写死成
+  <code>["single_point","geometry_optimization","excited_states","compare","scan","info","library"]</code>，
+  而服务器实际分派 18 种（含 <code>design</code>／<code>nto</code>／
+  <code>reaction</code>／<code>field</code>／<code>series</code>／
+  <code>vibrations</code>／<code>nmr</code>）。就算模型被咨询了，它也
+  <strong>无法</strong>把「设计一个分子」或「给我过渡态」路由出去——
+  它只能从它被告知的那七个里挑一个。</li>
+</ol>
+
+<h3>最要紧的一处：回退是静默的</h3>
+
+<p>前端里<strong>有一个专门的警告框</strong>，
+<code>app.js</code> 会挑出匹配 <code>/unavailable|fallback/i</code> 的
+notes 显示出来。也就是说「模型没被用上」这件事，界面上<strong>本来就有位置说</strong>。</p>
+
+<p>而那句 note 只在 <code>LLMPlanner.plan</code> 的 <code>except</code>
+分支里产生。<code>create_planner()</code> 在没配置时返回的是一个
+<strong>裸的 <code>RuleBasedPlanner</code></strong>——那个知道理由的对象，
+不是那个回答问题的对象。于是唯一真正发生过的失败模式（规划器根本没被构造），
+正好是唯一不产生任何 note 的模式。警告框空着，界面干净，
+「模型没被用上」和「请求本来就不需要模型」输出完全一样。</p>
+
+<h3>修法</h3>
+
+<ul>
+  <li><strong>一个读者。</strong><code>LLMPlanner</code> 建在
+  <code>LLMClient</code> 之上（配置、传输、重试、模型回退、推理字段处理
+  全部共用），<code>available</code> 直接来自客户端。两个端点<strong>结构上
+  无法再给出不同答案</strong>。</li>
+  <li><strong>schema 从 <code>JOB_TYPES</code> 渲染</strong>，不再手写。
+  写两遍的词汇表会漂移；这一份只写一遍。</li>
+  <li><strong>回复不再「解析成功就信任」。</strong>新增纯函数
+  <code>apply_llm_payload(intent, payload)</code>：逐字段校验
+  <code>job_type</code>／<code>molecules</code>／数值／词汇表，
+  拒绝的字段<strong>保留解析器的值并回报</strong>；
+  <code>notes</code>／<code>raw</code> 不可被模型覆写。</li>
+  <li><strong>回退永远带理由。</strong>没被模型规划时，
+  note 形如
+  <code>language model unavailable (&lt;真实错误&gt;); the request was parsed by
+  the built-in keyword parser</code>——正是前端会显示的那一句。
+  并且 <code>create_planner()</code> 不再返回裸解析器：知道理由的对象
+  就是回答问题的对象。</li>
+  <li><strong>界面把 AI 显示出来。</strong>顶栏新增一枚状态芯片
+  （<code>AI: sensenova-6.8-flash-lite ready</code> / <code>AI: keyword parser
+  only</code>），每条回复的意图卡新增一行「Planned by」。此前
+  「模型读懂了」和「正则匹配上了」在界面上长得一模一样——
+  这正是用户不得不问的原因。</li>
+  <li><strong>规划调用有上限</strong>（<code>PLAN_TIMEOUT = 30 s</code>，
+  超时由解析器接管<em>并说明</em>）。同一句请求在这个端点上实测
+  5 s 到 64 s 不等（慢的那个是主模型超时后回退到备用模型），
+  聊天转一圈卡一分钟，比立刻回答并说清「模型没答上来」更糟。</li>
+</ul>
+
+<h3>门禁：<code>backend.check_planner</code>（新增，已进 13 道默认门禁）</h3>
+
+<p>它断言的是不变量，不是实现：</p>
+
+<ul>
+  <li>规划器的可用性<strong>就是</strong>客户端的可用性，且规划器
+  <strong>自己不读任何环境变量</strong>（源码级检查——这里查的是「读」，
+  不是「出现」：第一版把 <code>plan()</code> 里那句
+  <em>告诉用户怎么配置</em> 的 <code>CHATDFT_LLM_KEY</code> 也当成了泄漏，
+  那是在检查散文，不是在检查行为）；</li>
+  <li>schema 覆盖 <code>JOB_TYPES</code> 与 <strong>从 <code>server.py</code>
+  里扫出来的</strong>每一条分派分支（写在门禁里的清单会是第三份拷贝）；</li>
+  <li><code>apply_llm_payload</code> 两个方向：合法的应用、非法的逐字段拒绝
+  且不落到意图上；</li>
+  <li><code>reasoning_content</code> 的回复形状能被读到；</li>
+  <li>「模型没被用上」的每一跳都带着<strong>前端真会显示</strong>的那句话——
+  那个正则<strong>从 <code>app.js</code> 里读出来</strong>，不是抄一份；</li>
+  <li>HTTP 上：<code>/api/chat</code> 必须报出谁规划的，且带上解释；</li>
+  <li>活的模型路径<strong>两个方向都断言</strong>：要么「模型规划了」，
+  要么「回退并说出了错误」；而<strong>当客户端说已配置时，
+  「no language model configured」这个理由本身判失败</strong>——
+  那不是限流，那就是这个缺陷。</li>
+</ul>
+
+<p>门禁服务器现在以 <code>CHATDFT_PLANNER=local</code> 运行：
+几乎每道门禁都会打 <code>/api/chat</code>，开着模型规划意味着整轮要花掉
+几分钟的模型延迟，而且账号一限流就失败——那是与被测代码无关的失败，
+看起来却和一个坏掉的路由器一模一样。<code>check_planner</code> 就是覆盖
+模型路径的那道门禁。</p>
+
+<h3>变异台：<code>backend.mutate_planner</code>（新增，6 个变异）</h3>
+
+<p>把四条故障一个一个放回去，看门禁是否开火：P1 规划器重新自己读环境变量、
+P2 schema 又手写成七个、P3 解析成功就应用不校验、P4 回退不再说
+「unavailable」、P5 <code>create_planner</code> 又返回裸解析器、
+P6 规划器不再问客户端却仍声称是模型规划的。</p>
+
+<h2>缺陷 9：门禁套件测的不是它自己的服务器 <span class="tag t-bad">严重</span></h2>
+
+<p>跑 <code>python -m backend.gates check_planner</code> 时，输出里有这么一行：</p>
+
+<div class="quote">[PASS] /api/chat reports planner='llm' with a note that explains it
+[PASS] /api/llm available=True is consistent with the chat planner='llm'
+       under CHATDFT_PLANNER=local</div>
+
+<p>第二行自己写着「under <code>CHATDFT_PLANNER=local</code>」，
+第一行却报告 <code>planner='llm'</code>。<strong>这两句不能同时成立</strong>——
+除非门禁套件测的服务器不是它自己启动的那一台。
+而当时 8000 端口上确实开着交付给用户的那台（auto 模式）。
+门禁自己启动的那台在临时目录里留下了这样一行：</p>
+
+<div class="quote">ERROR: [Errno 10048] error while attempting to bind on address
+('127.0.0.1', 8000): 通常每个套接字地址(协议/网络地址/端口)只允许使用一次。</div>
+
+<p>它<strong>绑不上端口就退出了</strong>，而套件照常跑完、照常报 PASS，
+只是每一道门禁都在打另一台服务器的接口——用另一套环境变量、
+另一个数据目录、以及<strong>可能是正在被变异台改写的源码树</strong>。
+为什么没人发现：</p>
+
+<ul>
+  <li><code>ensure()</code> 问的是「端口有人应答吗」，而端口当然有人应答。</li>
+  <li>被启动的进程在 <code>poll()</code> 那一刻还没退出，
+    而 uvicorn 的绑定错误发生在 <code>Application startup complete</code>
+    <strong>之后</strong>——所以「活着」与「绑上了」也不是同一件事。</li>
+  <li>那行错误写进了临时目录里的 <code>gate_server.log</code>，
+    没有人会去打开它。</li>
+</ul>
+
+<p>这与本轮反复出现的形状是同一个：<strong>报告说它测了 X，而它测的是 Y。</strong>
+区别只在于这次「X」是一整套回归门禁。</p>
+
+<h3>修法：先问端口，再问日志</h3>
+
+<ol>
+  <li><strong>启动前拒绝</strong>：若 8000 端口已有人应答，直接
+    <code>REFUSING TO RUN</code>（exit 2），并给出可执行的下一步
+    （<code>python kill_gate_server.py</code>）。与变异台的端口守卫同一条规则。</li>
+  <li><strong>启动后核对</strong>：<code>ensure()</code> 在健康检查通过后
+    <strong>再读一次自己的日志</strong>，出现绑定错误即拒绝——
+    「端口有人应答」与「我们启动的那台在应答」是两个不同的问题。</li>
+</ol>
+
+<p>修完之后的同一条命令：</p>
+
+<div class="quote">[PASS] /api/chat reports planner='local' with a note that explains it
+[PASS] /api/llm available=True is consistent with the chat planner='local'
+       under CHATDFT_PLANNER=local
+[PASS] sensenova-6.8-flash-lite planned it in 2.1s: job_type='nmr'
+  check_planner    PASS                 9 checks
+  check_selectors  PASS                 1 checks
+  2/2 gates passed</div>
+
+<p>现在 <code>local</code> 出现在它该出现的地方，而
+<code>CHATDFT_PLANNER=local</code> 这句注释也第一次<strong>被守卫住了</strong>——
+在此之前它只是一句关于代码的注释，没有任何东西保证它成立。</p>
+
+<h2>缺陷 10：参考物缓存没有代码版本 <span class="tag t-bad">严重</span></h2>
+
+<p>上一轮我给自己记的四个未复算缺口里，第 ② 项是「缓存键没有方法版本」。
+这一遍去看它，发现它比记的时候更严重：</p>
+
+<div class="quote">def _cache_key(key, basis, conv_tol, dB, geometry=""):
+    blob = json.dumps([key, basis, conv_tol, dB, geometry], sort_keys=True)
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:20]</div>
+
+<p>键里带基组、收敛限、场步长、几何指纹——<strong>唯独不带产生这个数的代码</strong>。
+而 <code>data/nmr_cache</code> 是<strong>随代码一起发布的数据</strong>：
+<code>backend/gen_nmr_cache.py</code> 把它算出来，它跟着代码树走。
+于是升级代码之后，旧的参考值会被读回来，<strong>每一条位移继承一个常数偏移，
+而输出里没有任何东西能显示它</strong>。</p>
+
+<p>模块自己的 docstring 已经把这个论证写过一遍了，只是没往代码上推：</p>
+
+<div class="quote">conv_tol in particular changes the 17O shielding of water by 15 ppm
+between 1e-11 and 1e-13.  A reference computed at the wrong tolerance
+would put a constant offset on every shift the product prints and
+there would be no way to see it from the output.</div>
+
+<p>用错的<em>代码</em>算出来的参考物，是同一个失败，同样看不见。
+而且它有具体的形状：<code>shielding_tensor</code> 里任何一个收敛判据、
+任何一个张量分量的写法改动，都会让全部七个参考物同时偏移——
+<strong>不会报错，不会变慢，只会让每一个位移都不对一点点。</strong></p>
+
+<h3>修法：版本从代码派生，不是一个人记得要改的常数</h3>
+
+<p><code>CACHE_FORMAT</code> 已经被手工改过两次，而「记得要改的常数」就是
+「会被忘掉的常数」——这一轮我已经在别处见过同一个形状（变异体引用了它想删掉的东西）。
+所以版本号不是常数：</p>
+
+<div class="quote">def _method_signature() -> str:
+    """A fingerprint of the code that produces the shielding number."""
+    parts = []
+    for fn in (_xyz, _build_mol, build_operators, shielding_tensor):
+        parts.append(inspect.getsource(fn))
+    parts.append(f"PPM={PPM!r}")            # 它们用到的常量
+    parts.append(f"FIELD_STEP={FIELD_STEP!r}")
+    parts.append(f"CONV_TOL={CONV_TOL!r}")
+    return hashlib.sha1("\n".join(parts).encode()).hexdigest()[:16]</div>
+
+<p>改这四个函数里任何一个，或者改任何一个常量，键就变，
+旧条目不再被读；改别的东西（前端、门禁、注释）不动它。
+<code>inspect.getsource</code> 从磁盘读源码，所以变异台改写了 <code>nmr.py</code> 之后
+签名也会变——<strong>被变异过的引擎读不到发布出去的那份缓存</strong>，
+这和变异台的端口守卫是同一条规则。</p>
+
+<p>两道守卫，因为路径不是全部：键里带 method（外来条目在另一个文件名下，不会被打开），
+<strong>读取器自己也校验 method</strong>（目录遍历、修复脚本、或者一个人
+把文件直接递给读取器时，这是最后一道）。门禁断言四个方向：变 method 键必须动、
+变几何键必须动、读取器必须拒绝外来 method、
+<strong>读取器必须接受正确 method</strong>——否则「拒绝一切」也会通过前一条。</p>
+
+<h3>验证的时候，先抓到了自己的探针</h3>
+
+<p>第一版探针按 payload 里的 <code>key</code> 字段把旧条目和新条目配对，
+结果报出：</p>
+
+<div class="quote">ammonia  H   32.7787 -> 32.6667   -0.1120   <-- MOVED
+ammonia  N  262.4793 -> 261.3335   -1.1459   <-- MOVED
+methane  C  200.1353 -> 199.3896   -0.7457   <-- MOVED
+!! THE SHIPPED CACHE DID NOT MATCH THE CODE THAT READ IT</div>
+
+<p><strong>这是假的。</strong>磁盘上有<em>两个</em> ammonia 条目，
+分别写在两个不同的几何上；只有其中一个在<strong>当前几何签名对应的路径</strong>上。
+探针配对的是那个<strong>孤儿</strong>——一个任何一次运行都没有读过的文件。
+它报出的 1.1459 ppm 差异，从来没有出现在任何一条位移里。</p>
+
+<p>改成「按当前几何签名重算当时真正被读的那个路径」之后：</p>
+
+<div class="quote">ammonia  H  32.6667  32.6667  +0.0000
+ammonia  N 261.3335 261.3335  +0.0000
+phosphine H 30.3262 30.3262  +0.0000
+phosphine P 620.1114 620.1114  +0.0000
+water    H  31.4306  31.4306  +0.0000
+water    O 323.8656 323.8656  +0.0000
+6 element values compared, worst disagreement 0.0000 ppm
+every live entry agreed with the code that read it</div>
+
+<p>也就是说：<strong>发布出去的那份缓存是诚实的</strong>，
+方法指纹是保险而不是补错。但如果不查这一步，报告里会多一个不存在的缺陷——
+这是本项目第六次遇到「量测工具的缺陷伪装成方法缺陷」，前五次分别在
+探针的单位、探针的几何、比较的排序方向、以及两处计数上。</p>
+
+<p>孤儿文件因此不再只是「无害」：它们会让<em>人</em>读错。
+新增 <code>nmr.cache_inventory()</code> 把「当前键可达」与「不可达」分开数出来，
+<code>gen_nmr_cache</code> 与 <code>check_shift_scales</code> 都会打印它，
+并且门禁断言<strong>每一个不可达条目都不能被读取器接受</strong>——
+它们不只是今天没被读，而是即使被打开也会被拒。</p>
+
+<div class="note"><strong>一个操作后果，必须写下来：</strong>方法指纹让
+<code>data/nmr_cache</code> 里 10 个条目全部失效，其中包括 TMS
+（17 原子、6-31G* 下 98 个基函数、约 6 GB）。这台机器上同时开着几个
+GB 级的应用，物理内存只剩 1.9 GB，<strong>内存守卫会拒绝重算 TMS</strong>——
+也就是说，在 TMS 重新生成之前，一次 NMR 作业拿不到 ¹H/¹³C 参考物。
+这不是缺陷，是守卫在设计上宁可不换页；但它是这次改动带来的、真实存在的
+操作性后果，所以要么跑完 <code>gen_nmr_cache</code>，要么接受第一次作业变慢。
+<code>gen_nmr_cache</code> 的 docstring 现在明写「改过屏蔽代码之后要重跑这个脚本」。</div>
+
+<h2>缺陷 11：一条失败消息比它描述的那条失败更容易被相信 <span class="tag t-bad">严重</span></h2>
+
+<p>上面那条缓存键改完之后，第一次实跑 63 条变异台，<strong>基线就中止了</strong>：</p>
+
+<div class="quote">!! baseline already failing: ['nmrcache: a payload written by _write_cache_atomic is
+   not readable by _read_cache, so the cache can never hit', "nmrcache: 10 shipped cache
+   entries are unusable: [...]. Regenerate with `python -m backend.gen_nmr_cache`"]</div>
+
+<p>第二条是<strong>预期的</strong>——那 10 个条目是旧格式，本来就该失效，正是缺陷 10
+要的结果。但第一条不是。它说的是：<strong>新写进去的条目也读不回来</strong>。
+如果那是真的，那么<em>缓存永远不会命中</em>，每一次 NMR 作业都要重算参考物，
+而输出里一个字都不会说——这是缺陷 10 刚刚被修掉的那类失败，又回来了。</p>
+
+<p>于是我去查读取器。三行探针就够了：</p>
+
+<div class="quote">signature   : 1ba77afcbe6a3e7b
+required    : ('key', 'label', 'basis', 'conv_tol', 'field_step_au', 'natm', 'nao',
+               'element_shielding_ppm', 'geometry', 'geometry_source',
+               'geometry_signature', 'method')
+WITHOUT method   write_err=None  read_back=False
+WITH method      write_err=None  read_back=True
+WRONG method     write_err=None  read_back=False</div>
+
+<p><strong>读取器三行全对。</strong>缺字段拒、对字段收、错字段拒——
+这正是它该做的。真正过期的是<strong>契约里那个往返夹具</strong>：
+它手写了一份字段清单，而 <code>_CACHE_REQUIRED</code> 加了 <code>method</code>
+之后那份清单就少了这一项。于是夹具写出了一个<em>读取器应当拒绝</em>的 payload，
+往返失败，然后失败消息把这件事故解释成了「缓存永不命中」。</p>
+
+<p><strong>那句话是关于产品的，而且是假的。</strong>它比它所描述的那条失败更容易被相信，
+因为它读起来像一个结论。我确实先去找了读取器的 bug——读取器没有 bug。
+这是本项目第七次「量测工具的缺陷伪装成方法缺陷」，前六次分别在探针的单位、
+探针的几何、比较的排序方向、两处计数、以及探针比到孤儿缓存条目上。</p>
+
+<h3>修法不是补字段，是让夹具自己说「我没跟上」</h3>
+
+<p>补上 <code>"method": _n._method_signature()</code> 只解决这一次。根因是夹具手写了
+一份它本可以从 <code>_CACHE_REQUIRED</code> <strong>派生</strong>的东西——
+这和本轮另外两次失效（N34 引用了被改掉的容差数字、N25 引用了被改掉的缓存键 blob）
+是同一个形状。所以完整性本身变成断言：</p>
+
+<div class="quote">_absent = [f for f in _n._CACHE_REQUIRED if f not in payload]
+if _absent:
+    fail.append(f"nmrcache: the round-trip fixture does not carry {_absent}, "
+                "which _CACHE_REQUIRED demands.  Every assertion below it is then "
+                "testing a shape the reader no longer accepts, and the first "
+                "failure it reports blames the product")</div>
+
+<p>下次再往 <code>_CACHE_REQUIRED</code> 加字段，失败消息会是一句关于
+<strong>夹具</strong>的话，而不是一句关于产品的话。</p>
+
+<h3>同一次检查里，还发现契约自相矛盾</h3>
+
+<p>契约原本断言「<code>data/nmr_cache</code> 里每一个 <code>.json</code> 都必须可读」。
+这条断言和缺陷 10 的设计<strong>直接冲突</strong>：旧条目<em>应该</em>存在，
+而且<em>应该</em>被拒绝。两者不能同时成立。原来那条断言只能靠删文件来满足，
+而删掉文件恰好会毁掉「方法守卫真的在起作用」的证据。</p>
+
+<p>所以它现在是两条，而第二条比原来那条<strong>更强</strong>：</p>
+
+<div class="quote">unreadable_live = [p for p in inv["live"]  if _n._read_cache(p) is None]
+readable_stale  = [p for p in inv["stale"] if _n._read_cache(p) is not None]</div>
+
+<p>一个<strong>不可达的条目重新变得可读</strong>，意味着方法守卫已经停止工作——
+那正是缺陷 10 存在的理由。当前实测：<strong>5 个可达条目全部可读，
+10 个不可达条目全部被拒</strong>，两个方向都成立。</p>
+
+<h2>缺陷 12：变异台不跑它引用的那些断言 <span class="tag t-bad">严重</span></h2>
+
+<p>基线修好之后，63 条变异跑完，61 条触发，两条<strong>什么都没触发</strong>：</p>
+
+<div class="quote">MUTATION PROBLEMS:
+  - N61 method-signature-is-a-constant: FIRED NOTHING -- the assertion guards nothing
+  - N62 method-not-a-required-cache-field: FIRED NOTHING -- the assertion guards nothing</div>
+
+<p>但这两条<strong>各自都有断言在守</strong>，而且那两条断言当时正在通过。
+它们住在 <code>check_shift_scales.check_cache_key()</code> 里：</p>
+
+<div class="quote">if nmr._cache_key("tms", ..., method + "x") == base:      # N60
+if "method" not in nmr._CACHE_REQUIRED:                   # N62
+    ...
+for name in ("shielding_tensor", "build_operators", "_build_mol", "_xyz"):
+    setattr(nmr, name, _stub);  moved = nmr._method_signature() != method   # N61</div>
+
+<p>而变异台的判定函数只跑四个 <code>contract</code> 段，<strong>从来没调用过那道门禁</strong>。
+所以「变异体什么都没抓到」和「断言根本没被调用」在日志里长得一模一样——
+这正是本轮反复出现的那个形状：<em>一个名字指向的检查，和实际运行的检查，可以是两个东西</em>。
+缺陷 9 里门禁套件测的是别人的服务器，这里是变异台不测自己的断言。</p>
+
+<h3>修法：把零 SCF 的那段接进判定函数</h3>
+
+<div class="quote">from backend import check_shift_scales as _css
+fail.extend(_css.check_cache_key())</div>
+
+<p><code>check_cache_key()</code> 不花 SCF（它是那道 10 分钟门禁里唯一免费的一段），
+所以接进来没有成本。接上之后的实跑：</p>
+
+<div class="quote">MUTATION N60 cache-key-ignores-the-method
+  -> 8 failure(s) raised:
+       nmrcache: 8 cache entries at a path the current key produces cannot be read
+       nmrcache: 5 entries that the current key cannot reach was read back anyway
+       cachekey: two different methods produced the same key
+MUTATION N61 method-signature-is-a-constant
+  -> 4 failure(s) raised:
+       cachekey: replacing shielding_tensor left the signature unchanged
+       cachekey: replacing build_operators left the signature unchanged
+       cachekey: replacing _build_mol left the signature unchanged
+MUTATION N62 method-not-a-required-cache-field
+  -> 1 failure(s) raised:
+       cachekey: 'method' is not a required cache field
+MUTATION N63 reader-stops-checking-the-method
+  -> 2 failure(s) raised:
+       nmrcache: an entry computed by a different method was accepted
+       cachekey: the reader accepted an entry stamped with a different method
+
+All 63 mutations fired; source restored cleanly.</div>
+
+<p>N60 从「触发」变成「触发 3 类共 8 条」，因为契约里新加的双向断言也在守它。
+还原后 <code>_method_signature()</code> 仍是 <code>1ba77afcbe6a3e7b</code>，
+与跑之前逐字节相同。</p>
+
+<div class="note"><strong>这一遍的两个缺陷是同一个缺陷。</strong>缺陷 11 是
+<em>夹具</em>在说谎：它写了一个该被拒的 payload，再把拒绝解释成产品坏了。
+缺陷 12 是<em>台子</em>在说谎：它没调用断言，再把没调用报告成没抓到。
+加上缺陷 9（套件在测别人的服务器）和缺陷 10 里那个比到孤儿的探针，
+本轮一共四次「仪器说谎」，而其中三次是<strong>在验证一个刚刚修好的缺陷时</strong>
+抓到的。测的东西越接近结论，越容易把测量装置的毛病读成结论的毛病。</div>
+
+<h2>缺陷 13：门禁的结论取决于这台机器当时有多少空闲内存 <span class="tag t-bad">严重</span></h2>
+
+<p>上一遍 <code>check_shift_scales</code> 全量跑出 PASS，用了 10 分 13 秒。
+这一遍跑同一个文件、同一份源码，它<strong>崩了</strong>：</p>
+
+<div class="quote">DFTError: NMR at 6-31g* needs about 3.0 GB for this molecule (82 basis
+functions) but only 2.8 GB of physical memory is free right now. Running it anyway
+would swap, which turns a five-minute calculation into an hour.</div>
+
+<p>崩的位置是 <code>check_one</code> 里的 <code>reference_shieldings</code>，
+被拒的是 F 核的参考物 <code>chloroform_f</code>（nao 82）。差别只有一样：
+跑的时候这台机器上还剩多少物理内存。<strong>一个门禁的结论不该取决于
+运行它的人当时开着几个浏览器。</strong></p>
+
+<p>更糟的一处藏在判定行里。原来的判定行是：</p>
+
+<div class="quote">=== PASS: drift check falsified; {len(todo)} of {len(known)} scale
+    entries, ... recomputed and consistent ===</div>
+
+<p>分子是 <code>len(todo)</code>——<strong>打算算的核数</strong>，不是<strong>算成功的核数</strong>。
+也就是说，即使把崩溃改成「跳过」，判定行仍然会报「5 of 5」而实际只算了 4 个。
+<strong>一次跳过必须让分子变小，否则它就不是跳过，只是一种更安静的通过。</strong></p>
+
+<h3>修法：拒绝要走到判定行里</h3>
+
+<div class="quote">def _recompute(fn, el, refused):
+    try:
+        return fn(el)
+    except nmr.DFTError as exc:
+        refused.append(f"{el}: {str(exc).split('.')[0][:110]}")
+        return []</div>
+
+<p>三个重算循环都经过它，判定行的分子改成实际重算数，并且
+<strong>只要有跳过就判 FAIL 并逐条列出</strong>——因为那些断言<em>从未运行</em>，
+而「从未运行」和「通过了」不能在日志里长得一样。修后实测：</p>
+
+<div class="quote">=== FAIL: 0 scale problem(s), and 1 recomputation(s) were REFUSED BY THE
+    MEMORY GUARD, so the assertions behind them never ran ===
+  - NOT RUN: F: NMR at 6-31g* needs about 3
+  (the refusal is the machine being short of memory, not the method: generate the
+   reference with `python -m backend.gen_nmr_cache`, or free memory and re-run)</div>
+
+<p>这次运行还顺手做了一件有用的事：Se 核（<code>dimethyl_selenide</code>，nao 72）
+没有被拒，算了 75.9 秒，并且<strong>把结果写进了缓存</strong>。
+所以一次失败的运行让下一次少付 76 秒——这也说明「跳过一个核」不等于
+「那个核什么也没发生」。</p>
+
+<p>这与缺陷 6 是同一个形状，只是发生在门禁自己身上：产品里早就换过更便宜的
+载体（thiophene → methanethiol），门禁没有。所以 F 核的这次拒绝现在被
+<strong>报告</strong>而不是被<strong>继承</strong>。</p>
+
+<h2>缺陷 14：审计报告里的一条待办，是按命名习惯编出来的 <span class="tag t-bad">严重</span></h2>
+
+<p>本报告此前在待办里写着：</p>
+
+<div class="quote">④ <code>check_raman</code>／<code>check_uv</code> 有变异台但不在默认门禁里。</div>
+
+<p>按这一轮剩下的缺口去查它时，第一句话就是：</p>
+
+<div class="quote">$ ls backend/check_raman.py backend/check_uv.py
+ls: cannot access 'backend/check_raman.py': No such file or directory
+ls: cannot access 'backend/check_uv.py': No such file or directory</div>
+
+<p><strong>这两个文件根本不存在。</strong>我按命名习惯推断它们存在——
+<code>check_shift_scales</code>、<code>check_planner</code>、<code>check_series</code>
+都是 <code>check_*</code>，于是「有 <code>mutate_raman</code>，那门禁应该叫
+<code>check_raman</code>」。而两个变异台守护的断言一直在
+<code>contract</code> 里：</p>
+
+<div class="quote">contract.py:3624:    uv_scale_sections(FAILURES)
+contract.py:3625:    raman_sections(FAILURES)
+contract.py:3626:    nmr_sections(FAILURES)
+contract.py:3627:    nmr_scale_sections(FAILURES)</div>
+
+<p>而 <code>contract</code> 就在 <code>GATES</code> 里，本轮跑了 <strong>52 项
+PASS</strong>。所以「不在默认门禁里」这句话<strong>是假的</strong>——
+一条写进报告的待办，会让人去找一个不存在的东西。</p>
+
+<p>这和缺陷 11 是同型：<em>写下来的结论，读的人会相信</em>。
+区别是缺陷 11 里说谎的是夹具的失败消息，这里说谎的是<strong>审计报告自己</strong>。
+本轮四次「仪器说谎」之外，这是第五次，而仪器是这份报告。</p>
+
+<h3>修法：让「变异台钉住的断言都在门禁里跑」成为断言</h3>
+
+<p>逐个核对五个变异台和门禁的 section 清单是一次性的人工动作，下次往变异台
+加一个 section 而忘了加进门禁，就会静默漂移——正是缺陷 12 的形状。
+所以它变成 <code>contract.harness_sections()</code>，从<strong>源码</strong>提取
+两边引用的 section 并断言包含关系（零 SCF，每次门禁都跑）：</p>
+
+<div class="quote">def _pinned_sections(src: str) -> set:
+    return set(_re.findall(r"\bcontract\.([a-z_]+_sections)\(", src))
+
+gated = &lt;main() 源码里出现的 *_sections 调用&gt;
+for harness in (...五个...):
+    pinned = _pinned_sections(harness 的源码)
+    for name in sorted(pinned - gated):
+        fail.append(f"harness: {harness} pins contract.{name}, which main() "
+                    "never calls -- so that harness is testing a check no "
+                    "gate performs")</div>
+
+<p>实测：<strong>8 个 section，全部对齐，0 条失败</strong>。证伪：把
+<code>main()</code> 里的 <code>raman_sections(FAILURES)</code> 删掉一行——</p>
+
+<div class="quote">BASELINE  -> 8 sections pinned, 0 failure(s)
+GATE LOSES raman_sections -> 1 failure(s)
+   - harness: mutate_raman pins contract.raman_sections, which main() never
+     calls -- so that harness is testing a check no gate performs
+RESTORED  -> 0 failure(s)          byte-identical: True</div>
+
+<h3>这条新检查自己犯了同一个错</h3>
+
+<p>它第一版假设每个变异台都有 <code>run_checks</code>——因为三个有。
+结果它报出两条失败：</p>
+
+<div class="quote">- harness: mutate_library.py has no run_checks, so there is nothing to compare
+- harness: mutate_planner.py has no run_checks, so there is nothing to compare</div>
+
+<p>而那两个变异台<strong>完全正常</strong>，只是用了别的函数名。
+<strong>「凭命名习惯假设」在同一个缺陷里出现了两次</strong>：一次让我编出一条
+待办，一次让我写出一条会误报的检查。修法是不再假设函数名——扫整个文件里的
+<code>contract.X_sections(</code> 调用，而不是扫一个叫 <code>run_checks</code> 的函数。
+并且加了三条自证伪（提取器必须看得见眼前的调用、必须不匹配散文里的提及、
+门禁侧必须至少提取到一个 section），因为「永远通过」与「从不运行」打印一样。</p>
+
+<h2>缺陷 15：我写来证明断言的三条变异里，有一条什么都没守护
+<span class="tag t-bad">严重</span></h2>
+
+<p>把三个 <code>SCALE_CHECK</code> 条目的理由从硬编码的 <code>note</code> 改成
+占位符渲染的 <code>why</code> 之后，我加了三条变异，用来证明新的形状断言是
+<strong>承重的</strong>——一条无法失败的断言只是装饰。</p>
+
+<p>实跑结果：</p>
+
+<div class="quote">N64  scale-Se-why-types-the-number        -> 2 failure(s)
+N65  scale-Se-why-loses-its-quotes         -> 1 failure(s)
+N66  scale-N-why-loses-the-experimental-value -> 0 failure(s)
+     !! FIRED NOTHING -- the assertion guards nothing</div>
+
+<p>N66 做的事是把氮的句子里 <code>{experimental:.0f}</code> 那一处换成
+「puts it.」——也就是<strong>把实验值从句子中拿掉</strong>。它什么都没触发，
+原因有两层，而<strong>两层都不是缺陷</strong>：</p>
+
+<ul>
+  <li><strong>那个字段在句子里出现了两次。</strong>除了
+  <code>{experimental:.0f}</code>，后半句还有
+  <code>subtract {experimental:.1f} ppm</code>。形状断言问的是「这个字段
+  <em>有没有</em>槽位」——这是一个存在性检查，删掉其中一处它仍然成立。</li>
+  <li><strong>渲染文本检查找的 token 是 <code>"380"</code>，而
+  <code>"380.2"</code> 里含有 <code>"380"</code>。</strong>第二处槽位还在，
+  渲染出 <code>380.2</code>，于是这条检查也通过。</li>
+</ul>
+
+<p>句子的性质是「用户能看到实验值」。替换之后他仍然能看到（<code>380.2</code>）。
+<strong>所以弱的是变异体，不是断言。</strong></p>
+
+<h3>错在哪：照 diff 写，而不是照断言写</h3>
+
+<p>这条变异是照着<strong>我刚编辑的那一行</strong>写的，不是照着<strong>我想证明的那条
+断言</strong>写的。这两件事那天恰好重合了两次（N64、N65 都对上了），第三次不重合，
+于是它守护了空气。</p>
+
+<p>这与缺陷 14 是同一个错，只是换了一条路：那条待办是照着命名习惯编的，这条变异是
+照着 diff 编的。<strong>一个瞄错目标的测试会永远通过，而且它与一个真的通过的测试
+打印得一模一样。</strong></p>
+
+<h3>修法：先把断言列出来，再看谁没有变异体</h3>
+
+<p><code>_reason_shape</code> 里有七条断言。把它们与变异清单逐条对照，缺口立刻显形：</p>
+
+<table>
+  <thead><tr><th>断言</th><th>原先由谁钉住</th></tr></thead>
+  <tbody>
+    <tr><td>理由里不得重述本表已有的数字</td><td>N48、N64</td></tr>
+    <tr><td><code>reason_kind</code> 必须是测量或论证</td><td>N49</td></tr>
+    <tr><td>测量型理由必须引用 <code>computed</code></td><td>N50、N65</td></tr>
+    <tr><td>被引用的字段必须真有占位符</td><td>N52、N64</td></tr>
+    <tr><td><code>why_quotes</code> 不得缺省</td>
+      <td><span class="tag t-bad">无</span></td></tr>
+    <tr><td>论证型理由不得引用数字</td>
+      <td><span class="tag t-bad">无</span></td></tr>
+    <tr><td>引用的字段名必须在允许的清单里</td>
+      <td><span class="tag t-bad">无</span></td></tr>
+  </tbody>
+</table>
+
+<p>三条没人钉。N66 被重新指向第一条，并补 N67、N68 覆盖后两条。
+<strong>七条断言现在全部有文件变异体可以让它失败</strong>，不再只有一次性探针。</p>
+
+<div class="quote">N66 删掉整行 why_quotes          -> 2 条（缺省 + 「测量却不引用计算值」）
+N67 把 geometry_spread 拼错        -> 1 条（不在允许的清单里）
+N68 把 29Si 的理由标成 argument    -> 1 条（论证却在引用数字）
+RESTORED  byte-identical: True</div>
+
+<div class="note"><strong>一个通用形状：</strong>检查因为<em>巧合</em>而通过，它就
+<em>在那个场景下</em>不可能失败。这里的巧合是「四舍五入后的 token 落在更精确的
+渲染里」。正确的反应是修变异体——断言描述的性质仍然为真——而不是把检查收紧到
+去禁止 <code>380.2</code> 含有 <code>380</code>。本项目此前已遇到过一次同型的
+巧合：<code>conformer_spread_ppm = 8.37</code> 的 token 是 <code>"8"</code>，
+而句子正在说 <code>77Se</code>。</div>
+
+<h3>顺带删掉的第三份副本</h3>
+
+<p>改完之后再读 <code>scale_why()</code> 的 docstring，发现它把那些数字又抄了一遍
+（氮的 472／380／380.2、氟的 212／272、硒的 101／3000／72）——<strong>而它抄的
+正是它自己文档化的那条规则</strong>。它讲的是历史（旧的 <code>note</code> 字段里
+确实有这些数），所以严格说它没有说错；但一份没人复算的副本，就是整个文件里最后
+一个还在声称某个值的地方。改成只列字段名：读者需要的是字段名，而字段名不会腐烂。</p>
+
+<h2>缺陷 16：内存守卫给用户看的那个数，比真实峰值低 26%
+<span class="tag t-bad">严重</span></h2>
+
+<p>缺陷 13 里，<code>check_shift_scales</code> 因为 <code>chloroform_f</code>
+（nao 82）被判「需 3.0 GB」而机器只剩 2.8 GB 才崩的。当时记下的待办是：
+<code>_BYTES_PER_NAO4 = 69</code> 的实测只有四个点、最大 nao = 54，
+nao = 82／98 处是<strong>外推</strong>——而守卫正是用这条外推在拒绝作业。
+所以这个数是可以被证伪的。机器当时有 4.6 GB 空闲，nao = 82 现在跑得动。</p>
+
+<p>测出来的（<code>.tmp_probe/probe_mem5.py</code>，绕过参考物缓存，
+因为 <code>reference_shieldings</code> 会直接返回缓存值、不分配内存）：</p>
+
+<div class="quote">  formaldehyde  nao= 32   1.1s  est   72.4 MB | shielding +  72.5 (slope  69.1) | total +  103.6 (slope  98.8) | est/total 0.70x
+  ethanol       nao= 54  12.1s  est  586.7 MB | shielding + 613.9 (slope  72.2) | total +  877.5 (slope 103.2) | est/total 0.67x
+  chloroform_f  nao= 82 107.4s  est 3119.6 MB | shielding +2843.0 (slope  62.9) | total + 4224.6 (slope  93.4) | est/total 0.74x</div>
+
+<h3>先把仪器校准，再读结论</h3>
+
+<p>nao = 32 处这个探针给出 shielding 斜率 <strong>69.1</strong>，而 probe_mem1 当初
+拟合的是 <strong>68.8</strong>——两个独立探针在同一台机器上给出同一个数，
+所以下面 nao = 82 的读数不是探针自己的毛病。这一步是必须的：本轮的每一次
+「方法缺陷」最后都发现是量测缺陷，反过来也一样，读数之前得先证明尺子是准的。</p>
+
+<h3>三件事，都不是「69 该改成别的数」</h3>
+
+<ol>
+  <li><strong>斜率不是常数。</strong>69.1（nao 32）→ 72.2（nao 54）→ 62.9（nao 82）。
+  68.8 不是渐近值，在 nao = 82 处高估屏蔽阶段约 <strong>9%</strong>。
+  四个点的 R² = 0.99997 说的是一条直线穿过那四个点，没说过第 82 个点也在这条线上。</li>
+  <li><strong>估算量的不是它声称要量的东西。</strong>probe_mem1 的基线取在
+  <code>build_operators</code> <em>之后</em>，所以拟合出的 68.8 只覆盖
+  <code>shielding_tensor</code> 阶段的增长——<strong>不含</strong>算符数组，
+  也不含解释器基线。而 <code>check_memory</code> 的文案说的是这个分子
+  「needs」多少。实测总增长是估算的 <strong>1.35–1.49 倍</strong>。</li>
+  <li><strong>两个误差方向相反，而且抵消了。</strong>常数在 nao = 82 处高估屏蔽阶段
+  约 10%，模型又漏掉算符与基线约 30%，净效果是
+  <code>0.72 × 1.25 = 0.90</code>——<strong>守卫实际执行的是「空闲 ≥ 0.90 ×
+  真实峰值」，而它自己以为在执行「空闲 ≥ 1.25 × 估算」</strong>。
+  两个抵消的错误看起来就是一个正确的数，这正是它至今没被发现的原因。</li>
+</ol>
+
+<p>还有一层：注释里 1.25 那个余量的<em>理由</em>是「does not cover a 1.23x error
+by much」——余量是被<strong>用来吸收常数的误差</strong>的。所以一旦把常数改对，
+这个余量的理由也就没了，两个数必须一起重新决定。</p>
+
+<div class="note"><strong>而行为本身大致是对的，这是关键。</strong>实测
+<code>chloroform_f</code> 在 <strong>4607 MB 空闲</strong>下峰值
+<strong>4224.6 MB</strong>（1.09× 余量）并成功跑完 107.4 秒。也就是说这台机器
+<em>做得了</em>这个作业。所以「把守卫收紧」并不显然正确——那会拒绝机器做得了的活，
+而 probe_mem1 的 docstring 抱怨的正是这个。真正错的是<strong>给用户看的那个数</strong>：
+它说 3.1 GB，真实是 4.2 GB。</div>
+
+<h3>还没决定的事</h3>
+
+<p>把估算改成「总峰值」之后，维持当前行为需要把余量写成 0.90（显式承认「峰值可能
+超过空闲内存，靠系统回收备用页与页面文件兜底」），而维持 1.25 就需要提高
+<code>MEMORY_BUDGET_MB</code>（否则 TMS nao = 98 在 <code>need &gt; budget</code>
+那一条上被直接拒绝，冷缓存的全新安装会丢掉每一个 ¹H／¹³C／²⁹Si 位移——
+正是 2426 行注释记下的那个回归）。两条路都站得住，取哪条是产品决定，不是测量决定。
+<strong>这一遍只记下测量，没有改常数。</strong></p>
+
+<h2>验证</h2>
+
+<table>
+  <thead><tr><th>检查</th><th>结果</th></tr></thead>
+  <tbody>
+    <tr><td><code>backend.check_shift_scales</code>（含自证伪段 + 趋势复算）</td>
+      <td><span class="tag t-ok">PASS</span>：
+      <code>=== PASS: drift check falsified; 5 of 5 ledger entries and 3 of 3
+      gaps recomputed and consistent ===</code>，8 条 computed 与 recorded 逐位相等，
+      ³¹P 趋势步实测 <strong>+40.93 ppm</strong>（声明「去屏蔽」，同号且远超 5 ppm 下界）</td></tr>
+    <tr><td><code>backend.check_shift_scales</code> 第三节：十二位移行（新增）</td>
+      <td><span class="tag t-ok">PASS，10 分 13 秒</span>：
+      <code>=== PASS: drift check falsified; 5 of 5 scale entries, 3 of 3 gaps
+      and 12 of 12 shift rows recomputed and consistent ===</code>。
+      ¹³C 的 6 行里 <strong>2 行</strong>在 2.5 ppm 内（最差 5.725，乙炔，具名例外；
+      最差<em>内点</em> 3.043，甲醇，平均 3.087）；¹H 的 6 行全部在 2.5 ppm 内
+      （最差 0.682，甲醇，平均 0.386）。<strong>旧容差 2.5 不成立这件事，
+      是门禁自己算出来并打印的。</strong></td></tr>
+    <tr><td>自证伪段本身可失败</td>
+      <td><span class="tag t-ok">四种破坏都被抓到</span>：容差带换常数 1e9 → 9 条问题；
+      趋势下界设 0（只剩符号检验）→ 3 条；判定函数变空操作 → 13 条；基线 0 条</td></tr>
+    <tr><td>新增的六条容差规则证明（<code>--prove</code>）</td>
+      <td><span class="tag t-ok">全部按正确方向触发</span>：2.0 ppm 被拒、3.0 ppm 通过、
+      20.0 ppm 被拒、陈旧例外被报、全例外被报、空台账被报
+      （第一版有两条方向写反，是运行台跑出来的）</td></tr>
+    <tr><td><code>backend.mutate_nmr</code>（<strong>68</strong> 个变异）</td>
+      <td><span class="tag t-ok">68 / 68 全部触发，零跳过，零 not-applicable</span>，
+      文件逐字节还原，还原后基线 0 条。预检自检通过
+      （<code>self-test fired on both a missing target and a syntax error</code>）</td></tr>
+    <tr><td>三个理由句从硬编码 <code>note</code> 改成占位符渲染的 <code>why</code></td>
+      <td><span class="tag t-ok">数字全部改为 <code>{placeholder}</code> 插值</span>：
+      氮／氟／硒三句由 <code>nmr.scale_why()</code> 从字段渲染，
+      <code>gap_why()</code> 与 <code>accuracy_note()</code> 共用同一个渲染器；
+      ¹⁹F 句里的孤儿数字 209.6／183.9（整个构建里没有对应字段）删除；
+      ⁷⁷Se 的理由从「被几何选择主导」（症状，且指向一个不存在的补救）改为
+      <strong>病因</strong>（第四行元素、基组无弥散函数、无相对论处理 → 顺磁项
+      定性错误），两条独立测量随后并列</td></tr>
+    <tr><td>契约新增共用 <code>_reason_shape()</code>（本轮新增，缺陷 15）</td>
+      <td><span class="tag t-ok">两个表都调用</span>：七条形状断言原先只写在
+      <code>SCALE_UNMEASURED</code> 循环里，<code>SCALE_CHECK</code> 从未跑过。
+      证伪矩阵：基线 0；字面量写回 <strong>2</strong>；删占位符 <strong>3</strong>；
+      <code>reason_kind</code> 未设 <strong>1</strong>；<code>why_quotes</code>
+      写错字段 <strong>1</strong>；还原 <strong>0</strong></td></tr>
+    <tr><td>新增变异 N64–N68（<code>_reason_shape</code> 的形状断言）</td>
+      <td><span class="tag t-ok">5 / 5 各触发预期的那一条</span>：
+      N64 把 <code>-101</code> 写回字面量 → 2 条（字面量 + 占位符）；
+      N65 <code>why_quotes</code> 置空 → 1 条；N66 删掉整行 <code>why_quotes</code>
+      → 2 条（缺省 + 「测量却不引用计算值」）；N67 把 <code>geometry_spread</code>
+      拼错 → 1 条；N68 把 ²⁹Si 的理由标成 <code>argument</code> → 1 条。
+      <strong>至此 <code>_reason_shape</code> 七条断言全部有文件变异体</strong></td></tr>
+    <tr><td>N36 因旧 <code>note</code> 字面量被删而静默失效（缺陷 15 的副产品）</td>
+      <td><span class="tag t-warn">被预检在跑任何 SCF 之前抓到</span> →
+      重新指向新 <code>why</code> 里的等价片段（删占位符而非打字面量），
+      并改名 <code>scale-Se-why-loses-its-measurement</code>。
+      这是本项目<strong>第四条</strong>被别处改动静默退役的变异体
+      （前三条：N34、N25、N37）</td></tr>
+    <tr><td>新增变异 N55–N59（十二位移台账的五条断言）</td>
+      <td><span class="tag t-ok">5 / 5 各触发预期的那一条</span>：
+      N55 台账砍到一行 → <code>has 1 row(s); a tolerance checked against one
+      molecule is the thing this table was added to stop</code>；
+      N56 例外名指向不存在的行 → <code>names 'me2se' as an exception, but no row
+      has that name</code>；N57 删掉 <code>TOLERANCE_UNBACKED["F"]</code> →
+      <code>unaccounted ['F']</code>；N58 ¹³C 容差写回 2.5 →
+      <code>methanol is 3.043 ppm out (5 row(s) checked, 3 over)</code>；
+      N59 ¹H 容差放宽到 5.0 → 2 条（11.6× 过宽 + 超最差内点 7.3×）</td></tr>
+    <tr><td>N34 因 ¹³C 容差 2.5→3.2 而静默失效</td>
+      <td><span class="tag t-warn">被新预检在跑任何 SCF 之前抓到</span> →
+      重新指向 ¹⁹F（误差 59.6 ppm，20 ppm 不可能成立）</td></tr>
+    <tr><td>新增变异 N42–N47（缺口表的六条形状断言）</td>
+      <td><span class="tag t-ok">6 / 6 各只触发预期的那一条</span>：
+      无计算值／无理由／参考物不符／几何键不符／超出量程／无量程</td></tr>
+    <tr><td>新增变异 N48–N54（理由文本的七条断言）</td>
+      <td><span class="tag t-ok">7 / 7 触发</span>：把数字写回字面量、<code>reason_kind</code>
+      非法、测量却不引用、占位符渲染成别的数、占位符被删、趋势符号非法、
+      趋势几何不可解析。N48/N52 各触发 2 条（第二条是第一条的后果，已在注释里写明）</td></tr>
+    <tr><td>N37 在同一轮里失效两次</td>
+      <td><span class="tag t-warn">两次都由运行台报 <code>mutation not applicable</code></span>
+      → 改为只依赖键名一行（改结构后不再失效）</td></tr>
+    <tr><td>变异台的崩溃防护（新增）</td>
+      <td><span class="tag t-ok">两条路都证明过</span>：合成变异体 X1（语法坏）
+      报 <code>INVALID SOURCE, not written</code> 且<strong>文件从未被写坏</strong>；
+      X2（能编译、导入时 <code>ZeroDivisionError</code>）报 <code>CRASHED,
+      assertion never reached</code>。两者插在<strong>最前面</strong>时，
+      其后 <strong>54 个真实变异体全部照跑</strong>，源码逐字节还原</td></tr>
+    <tr><td>统一预检 <code>backend.mutate_common</code>（新增）</td>
+      <td><span class="tag t-ok">五个变异台全部接入</span>：NMR <strong>68</strong>、
+      planner 6、Raman 16、UV 7、library 6（code）+ 15（data）——
+      <strong>0 条死变异</strong>。预检本身的自检每次都跑：喂进三条已知答案的
+      合成变异体，缺失目标与语法错误<strong>两个方向都必须被拒</strong>，否则拒绝
+      报告（一个永远返回空列表的预检与正确的预检从外面看一样）。
+      另有 <code>.tmp_probe/probe_preflight19.py</code> 把五个台一次问完，
+      毫秒级返回，省掉「预检失败也要先付基线 SCF」的那笔钱</td></tr>
+    <tr><td>预检在真实场景里立刻抓到一条死变异</td>
+      <td><span class="tag t-warn">N25 <code>cache-key-drops-geometry</code></span>：
+      它引用的是旧的 <code>[key, basis, conv_tol, dB, geometry]</code>，
+      我把 method 加进键之后它就不再匹配——<strong>在跑任何 SCF 之前</strong>
+      被报出来，而不是在整轮末尾报一句 <code>not applicable</code></td></tr>
+    <tr><td>新增变异 N60–N63（缓存键与读取器的四条断言）</td>
+      <td><span class="tag t-ok">4 / 4 各触发预期的那一条</span>：
+      N60 键丢掉 method、N61 签名变成常数、N62 method 不再是必需字段、
+      N63 读取器不再校验 method</td></tr>
+    <tr><td>缓存键的四个方向（<code>--prove</code> 内，零 SCF）</td>
+      <td><span class="tag t-ok">全部双向证明</span>：变 method 键必须动、
+      变几何键必须动、读取器必须拒绝外来 method、
+      <strong>读取器必须接受正确 method</strong>（否则「拒绝一切」也会通过前一条）；
+      另外断言四个屏蔽函数里<strong>任何一个</strong>被替换都必须让签名变化</td></tr>
+    <tr><td>发布出去的参考物缓存是否与读它的代码一致</td>
+      <td><span class="tag t-ok">一致</span>：按<strong>当前几何签名对应的路径</strong>
+      取「当时真正被读的那个文件」逐元素对比，6 个值、最差差异
+      <strong>0.0000 ppm</strong>。（第一版探针按 payload 的 <code>key</code>
+      字段配对，比到了一个孤儿，报出 1.15 ppm——<strong>是探针的缺陷，
+      不是产品的</strong>。见缺陷 10。）</td></tr>
+    <tr><td>门禁运行器的源码指纹（新增）</td>
+      <td><span class="tag t-ok">已接入</span>：运行前后各取 43 个文件的 sha256，
+      不一致则报 <code>SOURCE CHANGED DURING THE RUN</code> 并把整轮判为失败</td></tr>
+    <tr><td>契约 <code>nmr_sections</code> + <code>nmr_scale_sections</code></td>
+      <td><span class="tag t-ok">0 失败</span></td></tr>
+    <tr><td>容差可证伪规则</td>
+      <td><span class="tag t-ok">首次运行即在旧代码上开火</span>（H 5.8×），
+      修复后转绿，N33 再次开火</td></tr>
+    <tr><td><code>backend.mutate_library</code>（21 个变异）</td>
+      <td><span class="tag t-ok">21 / 21 全部触发</span>，文件逐字节还原</td></tr>
+    <tr><td><code>backend.mutate_planner</code>（新增，6 个变异）</td>
+      <td><span class="tag t-ok">6 / 6 全部触发，零跳过</span>：
+      P1 第二个读者 → <strong>7 条</strong>（含 <code>/api/llm</code> 与规划器
+      可用性的分歧）、P2 schema 又手写成七个 → 2 条、P3 解析成功就应用 → 3 条、
+      P4 回退不再说 unavailable → 2 条、P5 返回裸解析器 → 1 条、
+      P6 不问客户端 → 1 条；文件逐字节还原，还原后基线 0 条</td></tr>
+    <tr><td><code>backend.check_planner</code>（新增，进默认门禁）</td>
+      <td><span class="tag t-ok">PASS，9 项</span>；门禁服务器以
+      <code>CHATDFT_PLANNER=local</code> 运行，仍断言
+      <code>/api/chat reports planner='local' with a note that explains it</code>；
+      活模型路径实测 <code>sensenova-6.8-flash-lite planned it in 2.1s</code></td></tr>
+    <tr><td>门禁运行器的端口守卫（新增）</td>
+      <td><span class="tag t-ok">两个方向都证明过</span>：端口被占时
+      <code>REFUSING TO RUN: something is already listening on
+      127.0.0.1:8000</code> 且 <strong>exit 2</strong>；停服后
+      <code>2/2 gates passed</code>，且 <code>/api/chat</code> 报
+      <code>planner='local'</code>——证明<strong>套件测的确实是它自己那台</strong></td></tr>
+    <tr><td><code>backend.contract</code> 全量（本轮改动后重跑）</td>
+      <td><span class="tag t-ok">PASS，7 分 21 秒，0 条 FAIL</span>：
+      <code>=== PASS: every field the front end reads is present ===</code>；
+      台账断言 <code>[PASS] the accuracy ledger covers every referenced
+      nucleus (5 measured, 3 unmeasured); 2 tolerance(s) rest on a multi-row
+      ledger (12 rows) and 2 are named as one-molecule</code></td></tr>
+    <tr><td>端到端：修复前 vs 修复后</td>
+      <td><span class="tag t-bad">修复前</span> <code>POST /api/chat</code> →
+      <code>planner="local"</code>、0.1 s；<span class="tag t-ok">修复后</span> →
+      <code>planner="llm"</code>、<code>notes=["planned by sensenova-6.8-flash-lite"]</code>、
+      4.9 s，且 <code>job_type</code> 由模型给出</td></tr>
+    <tr><td>前端（新增 AI 状态芯片 + 意图卡「Planned by」行）</td>
+      <td><span class="tag t-ok"><code>check_selectors</code> PASS</span>；
+      <code>sweep</code> 确认 <code>/</code> 30539 B、<code>app.js</code> 149434 B
+      已由服务器提供</td></tr>
+    <tr><td>含硒真实作业（<code>methaneselenol</code>，端到端）</td>
+      <td><span class="tag t-ok">机制是活的</span>：
+      <code>unreferenced_elements: []</code>、
+      <code>scale_unusable_elements: ['Se']</code>、
+      Se 得 σ = 2021.14 ppm 且 <code>delta_ppm: None</code>，
+      C 与四个 H 照常出位移，警告与芯片文案都到位</td></tr>
+    <tr><td>契约载体回退</td>
+      <td><span class="tag t-ok">可见</span>：
+      <code>[PASS] ... (carrier: methanethiol, substituted for thiophene
+      refused for memory)</code></td></tr>
+    <tr><td>全部 13 道默认门禁（本轮第一次完整跑完）</td>
+      <td><span class="tag t-ok">13 / 13 PASS，37 分 22 秒</span>：
+      <code>check_selectors 1</code>、<code>check_library 66</code>、
+      <code>agent.designer 97</code>、<code>contract 52</code>、
+      <code>selftest 10</code>、<code>sweep 76</code>、<code>check_series 16</code>、
+      <code>check_fields 13</code>、<code>check_nto 14</code>、
+      <code>check_reaction 52</code>、<code>check_shift_scales 1</code>、
+      <code>verify_library_geometry 1</code>、<code>check_planner 9</code>，
+      <strong>零 FAIL</strong>，源码指纹前后一致（无
+      <code>SOURCE CHANGED DURING THE RUN</code>）。
+      上一遍担心的 <code>sweep</code> 服务器中途死亡<strong>没有复现</strong></td></tr>
+    <tr><td>服务端到端（重新启动后）</td>
+      <td><span class="tag t-ok">正常</span>：<code>/api/llm</code> →
+      <code>available: true</code>、<code>sensenova-6.8-flash-lite</code>、
+      两个模型可选；<code>GET /</code> 30539 B、<code>app.js</code> 149464 B，
+      与磁盘逐字节一致</td></tr>
+    <tr><td>参考物缓存补齐（缺陷 10 的操作性后果）</td>
+      <td><span class="tag t-ok">7 / 7 参考物全部有缓存</span>：
+      <code>chloroform_f 6-31g* nao=82 120.3s C 83.525, F 273.072, Cl 553.170</code>；
+      <code>dimethyl_selenide</code> 是门禁自己在一次运行中算出来并写进去的
+      （75.9 s）。<code>cache_inventory()</code> 7 个可达 / 10 个不可达</td></tr>
+    <tr><td>契约的缓存目录断言改成双向（本轮新增）</td>
+      <td><span class="tag t-ok">两个方向都成立</span>：7 个可达条目<strong>全部可读</strong>、
+      10 个不可达条目<strong>全部被拒</strong>。原来那条「每个 <code>.json</code>
+      都必须可读」与缺陷 10 的设计冲突，只能靠删文件来满足——而删掉它们
+      恰好会毁掉「方法守卫在起作用」的证据</td></tr>
+    <tr><td>契约往返夹具的完整性断言（本轮新增，缺陷 11）</td>
+      <td><span class="tag t-ok">让失败消息说对话</span>：夹具现在断言自己覆盖
+      <code>_CACHE_REQUIRED</code> 的每一个字段；缺字段时报出的是
+      <em>关于夹具</em>的句子，而不是「缓存永不命中」那句关于产品的假话</td></tr>
+    <tr><td><code>mutate_nmr</code> 第一次实跑（63 条）</td>
+      <td><span class="tag t-bad">基线中止</span>：夹具过期导致
+      <code>nmrcache: a payload written by _write_cache_atomic is not readable
+      by _read_cache</code>——三行探针证明<strong>读取器全对</strong>，
+      过期的是夹具（缺陷 11）</td></tr>
+    <tr><td><code>mutate_nmr</code> 第二次实跑（63 条）</td>
+      <td><span class="tag t-warn">61 / 63 触发</span>，N61、N62 报
+      <code>FIRED NOTHING</code>——而守它们的断言存在、且正在通过，
+      只是变异台<strong>从没调用过那道门禁</strong>（缺陷 12）</td></tr>
+    <tr><td><code>mutate_nmr</code> 第三次实跑（63 条，接入
+      <code>check_cache_key</code> 之后）</td>
+      <td><span class="tag t-ok">63 / 63 全部触发</span>，零跳过、零 not-applicable，
+      源码逐字节还原（<code>_method_signature()</code> 仍是
+      <code>1ba77afcbe6a3e7b</code>）。N60 从「触发」变成「触发 3 类共 8 条」，
+      因为契约新加的双向断言也在守它</td></tr>
+    <tr><td><code>mutate_nmr</code> 第四次实跑（<strong>68</strong> 条，缺陷 15 修完之后）</td>
+      <td><span class="tag t-ok">68 / 68 全部触发</span>，零跳过、零 not-applicable、
+      零 <code>FIRED NOTHING</code>；源码逐字节还原
+      （<code>_method_signature()</code> 仍是 <code>1ba77afcbe6a3e7b</code>）。
+      新五条各自命中预期断言：N64→2、N65→1、N66→2、N67→1、N68→1。
+      <strong>N66 是重写后的版本</strong>——它的前身什么都没触发（缺陷 15）</td></tr>
+    <tr><td><code>check_shift_scales</code> 全量（<code>chloroform_f</code> 补齐前）</td>
+      <td><span class="tag t-bad">崩在 <code>DFTError</code></span>：F 核参考物
+      nao 82 需 3.0 GB、机器只剩 2.8 GB。而判定行的分子还是
+      <code>len(todo)</code>（打算算的）——缺陷 13</td></tr>
+    <tr><td><code>check_shift_scales</code> 全量（接入 <code>_recompute</code> 之后）</td>
+      <td><span class="tag t-warn">FAIL，但不再崩</span>：
+      <code>=== FAIL: 0 scale problem(s), and 1 recomputation(s) were REFUSED BY
+      THE MEMORY GUARD, so the assertions behind them never ran ===</code> +
+      <code>- NOT RUN: F: ...</code></td></tr>
+    <tr><td><code>check_shift_scales</code> 全量（参考物补齐之后）</td>
+      <td><span class="tag t-ok">PASS，6 分 3 秒</span>：
+      <code>=== PASS: drift check falsified; 5 of 5 scale entries, 3 of 3 gaps
+      and 12 of 12 shift rows recomputed and consistent ===</code></td></tr>
+    <tr><td><code>check_shift_scales</code> 全量（<code>why</code>／<code>scale_why</code>
+      改动之后重跑）</td>
+      <td><span class="tag t-ok">PASS，5 分 41 秒，1/1</span>：
+      同一句判定行，<strong>5 个核 + 3 个缺口 + 12 行位移全部复算</strong>，
+      无 <code>NOT RUN</code>、无内存拒绝。参考物全部命中缓存
+      （<code>scale/F cached ref 2.1 s</code>、<code>scale/Se cached ref 4.9 s</code>），
+      苯仍是单笔最大开销（251.1 s）。¹³C 6 行里 2 行在 2.5 ppm 内、
+      最差内点 3.043（甲醇）、具名例外 5.725（乙炔）；¹H 6 行全部在内、
+      最差 0.682（甲醇）；³¹P 趋势步实测 <strong>+40.93 ppm</strong></td></tr>
+    <tr><td>新增 <code>contract.harness_sections()</code>（本轮新增，缺陷 14）</td>
+      <td><span class="tag t-ok">8 个 section 全部对齐，0 条失败</span>；
+      在真实的 <code>contract</code> 运行中（<code>_reason_shape</code> 改动之后重跑）：
+      <strong>51 条 <code>[PASS]</code>、0 条 <code>[FAIL]</code></strong>，
+      运行器汇总 <code>contract PASS 52 checks</code>、<code>1/1 gates passed</code>，
+      8 分 48 秒，判定行
+      <code>=== PASS: every field the front end reads is present ===</code>；
+      证伪：删掉 <code>main()</code> 里的 <code>raman_sections(FAILURES)</code>
+      一行 → 立刻报 <code>mutate_raman pins contract.raman_sections, which
+      main() never calls</code>，还原后逐字节相同。另有三条自证伪
+      （提取器必须看得见眼前的调用、必须不匹配散文里的提及、门禁侧必须
+      至少提取到一个 section）——因为「永远通过」与「从不运行」打印一样</td></tr>
+  </tbody>
+</table>
+
+<p>各门禁明细：<code>agent.designer</code> 97、<code>sweep</code> 76、
+<code>check_library</code> 66、<code>contract</code> 52、<code>check_reaction</code> 52、
+<code>check_series</code> 16、<code>check_nto</code> 14、<code>check_fields</code> 13、
+<code>selftest</code> 10、<code>check_selectors</code> 1、
+<code>check_shift_scales</code> 1、<code>verify_library_geometry</code> 1。</p>
+
+<div class="note">第一次跑这 5 道时 <code>verify_library_geometry</code> 以
+<code>0xC0000005</code>（访问违例）退出、0 项检查——单跑一次即通过。这是一次
+<strong>内存压力下的崩溃</strong>，不是缺陷；但它正好说明为什么「0 项检查的
+PASS」是危险的：崩溃与「没有可检查的东西」在汇总里长得一样。</div>
+
+<h3>关于「单独可达」的一次额外证明</h3>
+
+<p>N39（把硒放回无参考表）会同时触发两条断言：<code>nmrref</code> 的集合断言，
+和台账自己的「Se 不得回到 NO_REFERENCE_WHY」。<strong>共同触发不能证明后者
+不是死代码</strong>，所以另外做了一次直接调用：monkeypatch 后只跑台账那一段，
+得到 1 条失败（正是那一条），还原后 0 条。</p>
+
+<h2>本轮记下的、还没做的事</h2>
+
+<ul>
+  <li><code>mutate_library</code> 仍未在本轮改动后重跑（<code>contract</code> 与
+    <code>check_shift_scales</code> 都已随 13 道门禁跑过：PASS）。</li>
+  <li><code>sweep</code> 在
+    <code>check_selectors sweep check_planner</code> 那一批里跑到 29 项 PASS 后
+    <strong>门禁服务器自己死了</strong>（<code>!! the gate server died --
+    restarting it</code>），后面几项从未运行，于是整道门禁判 FAIL——
+    这与被测代码无关，是这台机器内存压力下跑多个 SCF 作业的老问题。
+    已单独重跑确认。这正是「报告说没抓到，真相是没跑」的第五个例子。</li>
+  <li>上一轮列出的四个未复算缺口：<strong>①（十二位移表）</strong>与
+    <strong>②（缓存键没有方法版本）</strong>本轮都走完了。
+    ① 行变成数据（<code>SHIFT_LEDGER</code>）、派生量由门禁打印、容差改为关于
+    整个核的声明（¹³C 2.5 → 3.2）、具名例外、契约分区断言、五条新变异体。
+    ② <code>nmr._method_signature()</code> 从四个屏蔽函数的源码派生（不是人工
+    常数）、<code>CACHE_FORMAT</code> 2 → 3、读取器自己校验 method、
+    <code>reference_cache_path()</code> 把路径收成一处、契约对缓存目录改成
+    双向断言、四条新变异体（N60–N63）。
+    剩下两个缺口里，<strong>④ 是编出来的</strong>——见缺陷 14：
+    <code>check_raman</code>／<code>check_uv</code> 这两个文件根本不存在，
+    两个变异台守护的断言一直在 <code>contract</code> 里跑；现在由
+    <code>contract.harness_sections()</code> 守住（8 个 section 全部对齐）。
+    <strong>③ 已做完</strong>：⁷⁷Se 的理由换成病因（第四行元素、无弥散函数、
+    无相对论处理），两条独立测量并列；氮／氟／硒三句的数字全部改成占位符插值，
+    由 <code>nmr.scale_why()</code> 渲染；契约新增共用的
+    <code>_reason_shape()</code> 并让两个表都调用。
+    <strong>四个缺口现在全部关闭。</strong></li>
+  <li><strong>下一轮的真实缺口（这一遍新发现的，不是编的）：</strong>
+    ① <code>check_shift_scales</code> 的十二位移行<b>不走磁盘缓存</b>，所以它
+    每次都要重算六个分子、约 6 分钟；正确方向是按几何签名缓存这十二行。
+    ② <code>_BYTES_PER_NAO4</code> 的实测只有四个点、最大 nao = 54，
+    nao = 82／98 处仍是外推——而内存守卫正是用这条外推在拒绝作业。
+    ③ ¹⁷O 缺的是<b>气相标样或显式溶剂模型</b>，不是文献数字；²⁹Si／³¹P 缺的是
+    一个经核实的实验位移。三条都已在表里钉住计算值，等外部值到来。</li>
+  <li><code>check_planner</code> 已随本轮第一次完整的 13 道门禁运行跑过
+    （9 项 PASS，含「一个设置一个读者」与推理模型的
+    <code>reasoning_content</code> 形状）。</li>
+  <li><code>check_shift_scales</code> 现在是<strong>最慢的一道门禁</strong>：参考物
+    全部命中缓存后约 6 分钟，缺缓存时更久（苯一个分子占 5 分钟）。
+    同一运行内已用模块级 memo 去掉重复计算（原先每个核各算一遍六个分子），
+    跨运行靠 <code>data/nmr_cache</code>。若以后要再缩短，正确方向是让十二行
+    也走磁盘缓存并按几何签名失效，而不是减少复算的行数。</li>
+  <li>¹⁷O 缺的是<strong>气相标样或显式溶剂模型</strong>，不是文献数字；²⁹Si／³¹P
+    缺的是一个经核实的实验位移。三条都已在表里钉住计算值，等外部值到来。</li>
+  <li>²H（TMS-d₁₂）是唯一还留在「可以做但还没做」状态的参考——但结论已改为
+    <strong>拒绝</strong>：氘进不了任何作业（<code>UNBUILDABLE_NUCLEI</code>）。</li>
+  <li><code>_BYTES_PER_NAO4</code> 的实测只有四个点、最大 nao = 54；nao = 82/98
+    处仍是外推。</li>
+  <li>临时产物待清理（<strong>已列清单，未删除</strong>）：根目录 <strong>27</strong> 个
+    <code>*.log</code>（09-12 起，跨第 18／19 轮）、<code>.tmp_probe/</code> 下
+    <strong>76</strong> 个 <code>*.log</code>（该目录共 86 个文件、约
+    <strong>19 MB</strong>，其中还有查文献时下载的
+    <code>se_guide.pdf</code>／<code>selenols.pdf</code>）；另有
+    <code>data/molecules/library.json.bak</code>、
+    <code>library.json.bak_r18</code>、<code>library.round18.bak</code> 三个备份
+    （<strong>建议保留</strong>——它们是分子库的回滚点，而本轮确认过库几何在
+    第 17 轮被重新推导过）。清理是纯外观问题，需要明确指定删哪些。</li>
+</ul>
+
+<p class="sub" style="margin-top:38px">本轮的教训可以压成四句：
+<strong>散文里的数字不会错，所以不能信；容差是断言，断言不能失败就什么也没守护；
+「一个数字会腐烂」的真正原因是没有任何东西复算它——所以修法是钉住它并加复算，
+不是把它删掉；而一个数字若写了两遍，它就能跟自己矛盾。</strong>
+这一轮里四次遇到同一形状——报告说「没抓到」，真相是「没跑」：变异台的跳过、
+契约因机器内存不足而变红、坏变异体把整轮中止在 43/47、以及源码在门禁运行期间
+被改动导致整批结果是混合版本。四次里只有第一次是产品缺陷，后三次都是
+<strong>测量装置</strong>的缺陷，而它们与「真的通过了」在输出里长得一样。
+（写这段时又碰上第五次：<code>sweep</code> 跑到一半门禁服务器死了，
+后面的检查从未运行。）</p>
+
+<p class="sub">这一遍把同一形状又数了三遍，而且三次<strong>都是在验证一个刚修好的
+缺陷时</strong>抓到的：契约的往返夹具过期之后，它写出了一个<em>该被拒</em>的
+payload，再把拒绝解释成「缓存永不命中」——<strong>一句关于产品的假话</strong>，
+害我去查了一个不存在的读取器 bug；变异台从没调用过守 N61／N62 的那道门禁，
+于是「什么都没抓到」与「根本没调用」打印成一样；门禁的判定行用「打算算的核数」
+当分子，于是内存守卫拒绝一个核时它仍然会报「5 of 5」。
+本轮五次仪器说谎——门禁套件在测别人的服务器、探针比到孤儿缓存条目、
+夹具怪产品、台子没接线、审计报告自己编出一条待办——其中<strong>四次是
+在验证过程中</strong>抓到的。
+<strong>测的东西越接近结论，越容易把测量装置的毛病读成结论的毛病。</strong></p>
+
+<p class="sub">写缺陷 15 的时候又碰上第六次，而这一次的仪器是我刚写下的测试：
+三条用来证明新断言承重的变异里，两条命中了，第三条<strong>什么都没触发</strong>。
+它照着「我刚编辑的那一行」写，而不是照着「我想证明的那条断言」写——
+与缺陷 14 同一个错，换条路走。<strong>一个瞄错目标的测试会永远通过，而且它
+与一个真的通过的测试打印得一模一样。</strong>修法不是补一条断言，是先把
+<code>_reason_shape</code> 的七条断言逐条列出来，再看谁没有变异体：当时有三条
+无人钉，补上之后七条全部可被文件变异体证伪。缺陷 14 的教训是「写下来的名字
+要核实」，这一条是它的对偶：<strong>写下来的测试要对着它声称要证明的东西。</strong></p>
+
+<p class="sub">而缺陷 8 给的是同一条教训的另一种写法：
+<strong>状态端点与行为可以不一致，而不一致时用户看到的是行为。</strong>
+<code>/api/llm</code> 说 <code>available: true</code>，
+<code>/api/chat</code> 说 <code>planner: "local"</code>，两边都没有错——
+因为同一个设置有两个读者。用户问「没有 AI 吗」的时候，
+他问的不是配置，是行为，而他对了。</p>
+
+<p class="sub">十二位移表这条线最后给出的是一条更窄、更机械的教训：
+<strong>变异体引用了它想删掉的东西，那东西一改它就坏。</strong>
+把 ¹³C 的容差从 2.5 改成 3.2，同时<em>改对了</em>一个数并<em>悄悄杀死</em>
+一条变异体——它报 <code>mutation not applicable</code>，
+而这句在日志里与「这条断言这一轮没被覆盖」长得一样。
+第 19 轮已经因为 N37 写过一次同样的教训，这次换了方向又来一遍，
+所以修法从「改回去」变成了「让它在跑任何 SCF 之前自己说出来」，
+并且预检<strong>自己也要被证伪</strong>——一个永远返回空列表的预检，
+和一个正确的预检，从外面看完全一样。</p>
+
+<p class="sub">还有一条只值一行、但同类：<code>check_shift_scales</code> 命中 memo 时
+印 <code>0.0 s</code>，读者得到的是「算得很快」，真相是「没算」。
+<strong>日志里印一个时长，就是在断言「算过了」</strong>，所以现在印的是
+<code>tensor reused from this run</code>。同一形状的东西在这一轮里出现过三次：
+一个没有 CSS 定义的类名（<code>num</code>，而定义的是 <code>n</code>）、
+一段在 docstring 里出现两次的整段话、以及一句在它描述的东西被删掉之后
+还留在原地的注释。<strong>写了名字，没有任何东西读它——这和一道没有接线的门禁
+是同一种缺陷。</strong></p>
+
+</main>
+</body>
+</html>

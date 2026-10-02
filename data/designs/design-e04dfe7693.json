@@ -1,0 +1,91 @@
+{
+ "id": "e04dfe7693",
+ "brief": {
+  "text": "Design a molecule with a large HOMO-LUMO gap and no nitrogen",
+  "goal": "Design a small organic molecule with a large HOMO-LUMO gap and no nitrogen atoms.",
+  "n_candidates": 12,
+  "generations": 1,
+  "dft_top": 3,
+  "max_atoms": 30,
+  "min_atoms": 3,
+  "max_molwt": null,
+  "min_molwt": null,
+  "max_logp": null,
+  "min_logp": null,
+  "allowed_elements": null,
+  "forbidden_elements": [
+   "N"
+  ],
+  "required_smarts": [
+   "[N+](=O)[O-]"
+  ],
+  "forbidden_smarts": [
+   "[N]"
+  ],
+  "seeds": [
+   "c1ccccc1",
+   "C=C",
+   "C#C",
+   "Fc1ccccc1",
+   "FC(F)(F)F"
+  ],
+  "seed_focus": [],
+  "seed_names": [],
+  "functional": "b3lyp",
+  "basis": "6-31g*",
+  "notes": [],
+  "has_numeric": true,
+  "alert_filter": "none",
+  "optimize_leads": false,
+  "targets": [
+   {
+    "key": "gap",
+    "aim": "max",
+    "weight": 1.0,
+    "low": 4.0,
+    "high": 8.0,
+    "value": null,
+    "label": "HOMO-LUMO gap"
+   }
+  ]
+ },
+ "candidates": [],
+ "rejected": 637,
+ "generated": 637,
+ "dft_ran": 0,
+ "dft_cached": 0,
+ "generations": 1,
+ "origins": {},
+ "model_used": "sensenova-6.8-flash-lite",
+ "model_notes": [
+  "Only 0 of the 12 requested candidates satisfied every hard constraint. The commonest rejection reasons were: contains N (584); missing required substructure [N+](=O)[O-] (44); only # atoms (9). Widening the pool needs a looser limit, a different substructure, or a model proposal for the specific scaffold.",
+  "0 of the 12 requested molecules carry every required substructure; the rest were kept to fill the list and are marked as not matching the requirement."
+ ],
+ "seconds": 290.39,
+ "targets": [
+  {
+   "key": "gap",
+   "aim": "max",
+   "weight": 1.0,
+   "low": 4.0,
+   "high": 8.0,
+   "value": null,
+   "label": "HOMO-LUMO gap"
+  }
+ ],
+ "qualified": 0,
+ "requirements": [
+  "[N+](=O)[O-]"
+ ],
+ "unmet_requirements": [],
+ "rejection_reasons": {
+  "contains N": 584,
+  "missing required substructure [N+](=O)[O-]": 44,
+  "only # atoms": 9
+ },
+ "quality_checks": {
+  "sa_score": true,
+  "qed": true,
+  "alerts": true
+ }
+}

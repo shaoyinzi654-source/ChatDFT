@@ -1,0 +1,41 @@
+{
+ "format": 2,
+ "key": "water",
+ "label": "H2O",
+ "formula": "H2O",
+ "geometry": "H-O 0.9686 A x2; H-O-H 104.00 deg (the molecule library)",
+ "geometry_source": "library",
+ "geometry_signature": "a63780519479",
+ "geometry_documented": "O-H 0.9572 A, H-O-H 104.52 deg (experimental r_e)",
+ "basis": "sto-3g",
+ "conv_tol": 1e-13,
+ "field_step_au": 0.0003,
+ "natm": 3,
+ "nao": 7,
+ "atoms_per_element": {
+  "O": 1,
+  "H": 2
+ },
+ "element_shielding_ppm": {
+  "O": {
+   "sigma_iso_ppm": 359.27817430365985,
+   "spread_ppm": 0.0,
+   "n_equivalent": 1,
+   "per_atom_ppm": [
+    359.27817430365985
+   ]
+  },
+  "H": {
+   "sigma_iso_ppm": 33.34016884376628,
+   "spread_ppm": 7.823075520718703e-12,
+   "n_equivalent": 2,
+   "per_atom_ppm": [
+    33.34016884376237,
+    33.34016884377019
+   ]
+  }
+ },
+ "dE_dB_max": 0.0,
+ "tensor_asymmetry_max_ppm": 2.8314867300978657,
+ "cached": false
+}
