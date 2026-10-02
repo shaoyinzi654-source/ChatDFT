@@ -14,46 +14,60 @@ your machine, at the moment you ask for it.
 ### The workbench
 
 Every picture below is a screenshot of the running application answering a real
-question. Nothing is mocked up, composited or re-drawn — if the orbital looks
-like that, it is because SCF produced it. Click any image to see it full size.
+question, and each one names the sentence that produced it. Nothing is mocked
+up, composited or re-drawn — if the orbital looks like that, it is because SCF
+produced it. Click any image to see it full size.
 
-<img src="docs/img/01-home.png" width="100%"
-     alt="Three-pane workbench: chat on the left, the 3D structure in the middle, the results dashboard on the right">
+![The workbench in use](docs/img/01-home.png)
 
-<table>
-<tr>
-<td width="50%"><img src="docs/img/02-orbitals.png" width="100%" alt="Kohn-Sham orbital ladder for pyridine"><br>
-<sub><b>Kohn–Sham orbital ladder</b> — <i>“What is the HOMO-LUMO gap of pyridine?”</i><br>
-every orbital, labelled with its spin channel and its Löwdin composition</sub></td>
-<td width="50%"><img src="docs/img/03-uvvis.png" width="100%" alt="TD-DFT UV-Vis absorption curve for formaldehyde"><br>
-<sub><b>UV-Vis absorption</b> — <i>“Compute the first 6 excited states of formaldehyde”</i><br>
-TD-DFT (Tamm–Dancoff), Lorentzian-broadened, on a relative and an absolute ε axis</sub></td>
-</tr>
-<tr>
-<td width="50%"><img src="docs/img/04-scan.png" width="100%" alt="Rigid potential-energy scan along the O-H bond of water"><br>
-<sub><b>Rigid bond scan</b> — <i>“Scan the O-H bond of water”</i><br>
-twelve points, the fitted minimum, and an anharmonicity check</sub></td>
-<td width="50%"><img src="docs/img/05-nmr.png" width="100%" alt="GIAO NMR spectrum of water"><br>
-<sub><b>NMR spectrum</b> — <i>“What are the NMR shieldings of water?”</i><br>
-GIAO shielding tensors against a reference computed by the same code</sub></td>
-</tr>
-<tr>
-<td width="50%"><img src="docs/img/06-series.png" width="100%" alt="Series trend chart over four molecules"><br>
-<sub><b>Series and trend</b> — <i>“Show me a series of benzene, pyridine, furan and pyrrole”</i><br>
-four molecules at one level of theory, so the numbers are directly comparable</sub></td>
-<td width="50%"><img src="docs/img/07-vibrations.png" width="100%" alt="Harmonic IR spectrum of water"><br>
-<sub><b>IR spectrum</b> — <i>“Compute the IR spectrum of water”</i><br>
-analytic Hessian, harmonic frequencies, intensities in km/mol, sum-rule checked</sub></td>
-</tr>
-<tr>
-<td width="50%"><img src="docs/img/08-geometry.png" width="100%" alt="Optimised geometry of benzene with bond lengths and angles"><br>
-<sub><b>Geometry optimisation</b> — <i>“Optimise the geometry of benzene”</i><br>
-analytic-gradient BFGS, with the bond lengths and angles it converged to</sub></td>
-<td width="50%"><img src="docs/img/09-nci.png" width="100%" alt="NCI reduced-density-gradient plot for the water dimer"><br>
-<sub><b>NCI / RDG analysis</b> — <i>“NCI of the water dimer”</i><br>
-reduced density gradient against sign(λ₂)ρ, with the cut-off reported</sub></td>
-</tr>
-</table>
+**The workbench** — chat, 3D structure and results, side by side.<br>
+*“What is the HOMO-LUMO gap of naphthalene?”* — the answer, the property
+cards, the atomic charges and the job history, all from one SCF run.
+
+![TD-DFT UV-Vis absorption curve for formaldehyde](docs/img/03-uvvis.png)
+
+**UV-Vis absorption** · *“Compute the first 6 excited states of formaldehyde”*<br>
+TD-DFT (Tamm–Dancoff) vertical excitations, Lorentzian-broadened, on a relative
+and an absolute ε axis, with the oscillator strengths and ε<sub>max</sub> per band.
+
+![NCI reduced-density-gradient plot for the water dimer](docs/img/09-nci.png)
+
+**NCI / RDG analysis** · *“NCI of the water dimer”*<br>
+Reduced density gradient against sign(λ₂)ρ, with the cut-off reported and the
+weak interaction named.
+
+![GIAO NMR spectrum of water](docs/img/05-nmr.png)
+
+**NMR spectrum** · *“What are the NMR shieldings of water?”*<br>
+GIAO shielding tensors against a reference computed by the same code, with the
+integral drawn as the stick heights.
+
+![Kohn–Sham orbital ladder for pyridine](docs/img/02-orbitals.png)
+
+**Kohn–Sham orbital ladder** · *“What is the HOMO-LUMO gap of pyridine?”*<br>
+Every orbital, labelled with its spin channel, and the Löwdin composition of
+the frontier pair.
+
+![Series trend chart over four molecules](docs/img/06-series.png)
+
+**Series and trend** · *“Show me a series of benzene, pyridine, furan and pyrrole”*<br>
+Four molecules at one level of theory, so the numbers are directly comparable.
+
+![Optimised geometry of benzene](docs/img/08-geometry.png)
+
+**Geometry optimisation** · *“Optimise the geometry of benzene”*<br>
+Analytic-gradient BFGS, with the bond lengths and angles it converged to.
+
+![Harmonic IR spectrum of water](docs/img/07-vibrations.png)
+
+**IR spectrum** · *“Compute the IR spectrum of water”*<br>
+Analytic Hessian, harmonic frequencies, absolute intensities in km/mol,
+sum-rule checked.
+
+![Rigid potential-energy scan along the O-H bond of water](docs/img/04-scan.png)
+
+**Rigid bond scan** · *“Scan the O-H bond of water”*<br>
+Twelve points, the fitted minimum, and an anharmonicity check.
 
 ---
 
