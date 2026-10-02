@@ -918,6 +918,29 @@ tbody tr.highlight td { font-weight: 600; color: var(--accent); }
 
 /* ---------------------------------------------------------------- charts */
 canvas { max-width: 100%; }
+
+/* A definite ceiling on every Chart.js canvas.
+ *
+ * Every chart is created with `maintainAspectRatio: false`, which makes the
+ * canvas fill its parent.  The parents here have no fixed height, so the
+ * canvas grew the parent and the parent grew the canvas: measured on the
+ * UV-Vis figure, the canvas reached 41,667 px tall (its markup says 240) and
+ * the results pane reached 6,870,677 px, pushing the whole dashboard off the
+ * screen and drawing the spectrum as a single vertical line.
+ *
+ * `max-height` and not `height`: Chart.js writes an inline style height, and
+ * an inline declaration beats a stylesheet one -- but it cannot beat a
+ * stylesheet max-height, which clamps whatever height is asked for.  That is
+ * why the one-off `#ramanWrap canvas { max-height: 260px }` this replaces
+ * worked for Raman while the other eleven figures stayed broken.
+ *
+ * Each value is the height the markup already declares, so the fix restores
+ * the intended size rather than inventing one.
+ */
+#seriesChart, #reactionChart, #nciChart { max-height: 300px; }
+#orbChart, #dosChart { max-height: 260px; }
+#uvChart, #specChart, #vibChart, #ramanChart, #nmrChart, #scanChart { max-height: 240px; }
+#ircChart { max-height: 220px; }
 .chart-card {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-sm);
@@ -995,7 +1018,6 @@ canvas { max-width: 100%; }
   margin: 18px 0 6px; font-size: 13px; font-weight: 600;
   letter-spacing: .02em; color: var(--fg, #111827);
 }
-#ramanWrap canvas { max-height: 260px; }
 #ramanNote strong.warn { color: #b45309; }
 #ramanSkip { margin-top: 12px; }
 #reactivityBlock .chip { margin: 0 6px 6px 0; }

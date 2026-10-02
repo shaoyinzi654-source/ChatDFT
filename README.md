@@ -9,7 +9,51 @@ results dashboard. Nothing is faked or looked up from a table: every energy,
 orbital and optimised geometry you see is computed by an SCF solver running on
 your machine, at the moment you ask for it.
 
-![three panel layout: chat, 3D structure, results]
+![ChatDFT — conversational density functional theory](docs/img/00-banner.jpg)
+
+### The workbench
+
+Every picture below is a screenshot of the running application answering a real
+question. Nothing is mocked up, composited or re-drawn — if the orbital looks
+like that, it is because SCF produced it. Click any image to see it full size.
+
+<img src="docs/img/01-home.png" width="100%"
+     alt="Three-pane workbench: chat on the left, the 3D structure in the middle, the results dashboard on the right">
+
+<table>
+<tr>
+<td width="50%"><img src="docs/img/02-orbitals.png" width="100%" alt="Kohn-Sham orbital ladder for pyridine"><br>
+<sub><b>Kohn–Sham orbital ladder</b> — <i>“What is the HOMO-LUMO gap of pyridine?”</i><br>
+every orbital, labelled with its spin channel and its Löwdin composition</sub></td>
+<td width="50%"><img src="docs/img/03-uvvis.png" width="100%" alt="TD-DFT UV-Vis absorption curve for formaldehyde"><br>
+<sub><b>UV-Vis absorption</b> — <i>“Compute the first 6 excited states of formaldehyde”</i><br>
+TD-DFT (Tamm–Dancoff), Lorentzian-broadened, on a relative and an absolute ε axis</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/img/04-scan.png" width="100%" alt="Rigid potential-energy scan along the O-H bond of water"><br>
+<sub><b>Rigid bond scan</b> — <i>“Scan the O-H bond of water”</i><br>
+twelve points, the fitted minimum, and an anharmonicity check</sub></td>
+<td width="50%"><img src="docs/img/05-nmr.png" width="100%" alt="GIAO NMR spectrum of water"><br>
+<sub><b>NMR spectrum</b> — <i>“What are the NMR shieldings of water?”</i><br>
+GIAO shielding tensors against a reference computed by the same code</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/img/06-series.png" width="100%" alt="Series trend chart over four molecules"><br>
+<sub><b>Series and trend</b> — <i>“Show me a series of benzene, pyridine, furan and pyrrole”</i><br>
+four molecules at one level of theory, so the numbers are directly comparable</sub></td>
+<td width="50%"><img src="docs/img/07-vibrations.png" width="100%" alt="Harmonic IR spectrum of water"><br>
+<sub><b>IR spectrum</b> — <i>“Compute the IR spectrum of water”</i><br>
+analytic Hessian, harmonic frequencies, intensities in km/mol, sum-rule checked</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/img/08-geometry.png" width="100%" alt="Optimised geometry of benzene with bond lengths and angles"><br>
+<sub><b>Geometry optimisation</b> — <i>“Optimise the geometry of benzene”</i><br>
+analytic-gradient BFGS, with the bond lengths and angles it converged to</sub></td>
+<td width="50%"><img src="docs/img/09-nci.png" width="100%" alt="NCI reduced-density-gradient plot for the water dimer"><br>
+<sub><b>NCI / RDG analysis</b> — <i>“NCI of the water dimer”</i><br>
+reduced density gradient against sign(λ₂)ρ, with the cut-off reported</sub></td>
+</tr>
+</table>
 
 ---
 
@@ -44,7 +88,7 @@ Supported out of the box:
 * **Implicit solvent** — ddCOSMO, with built-in permittivities for water,
   methanol, ethanol, acetone, DMSO, dichloromethane, chloroform, THF, toluene,
   benzene, acetonitrile and hexane
-* **Molecule library** — 44 built-in structures spanning diatomics, aromatics,
+* **Molecule library** — 65 built-in structures spanning diatomics, aromatics,
   heterocycles, biomolecules, ions and radicals
 
 ### The figures a paper needs
@@ -159,7 +203,7 @@ hydrogens 0.43 A from a ring carbon, which collapsed its HOMO-LUMO gap to
 that file:
 
 ```bash
-python -m backend.check_library     # geometric sanity of all 44 entries
+python -m backend.check_library     # geometric sanity of every entry
 python -m backend.rebuild_library   # regenerate any bad entry from its SMILES
 ```
 
@@ -637,6 +681,7 @@ ChatDFT/
 ├── data/llm.example.json    LLM config template; copy to data/llm.json
 ├── probes/                  the scripts that measured the constants in nmr.py
 ├── reports/                 per-round audit reports (Chinese, self-contained)
+├── docs/img/                the screenshots above, captured from the running app
 └── requirements.txt
 ```
 

@@ -36,6 +36,17 @@ def check(name, ok, detail=""):
         FAILURES.append(name)
 
 
+def chart_box(page, cid="uvChart"):
+    """The canvas's laid-out box, in CSS pixels."""
+    return page.evaluate(
+        """(cid) => {
+            const c = document.getElementById(cid);
+            if (!c) return null;
+            const r = c.getBoundingClientRect();
+            return {w: Math.round(r.width), h: Math.round(r.height)};
+        }""", cid)
+
+
 def chart_state(page, cid="uvChart"):
     """Axis title, dataset label and the plotted y values, from Chart.js."""
     return page.evaluate(
@@ -93,6 +104,28 @@ def main() -> int:
             browser.close()
             print("\n1 FAILURES: chart missing")
             return 1
+
+        # --- the figure has a box, and is not still growing --------------
+        # Every chart is built with maintainAspectRatio:false, so the canvas
+        # fills its parent; a parent with no fixed height then grows to fit
+        # the canvas, and the two feed each other.  Measured before the CSS
+        # ceiling existed: the UV-Vis canvas reached 41,667 px tall -- its
+        # markup says 240 -- and the results pane 6,870,677 px, with the
+        # spectrum drawn as a single vertical line.
+        #
+        # chart_state() cannot see any of that.  It reads the Chart.js model,
+        # and the model stayed perfectly correct throughout: right numbers,
+        # right axis title, right window, nothing on screen.  One reading
+        # cannot see it either, because early on the canvas is still the size
+        # the markup asked for.  Only two readings, some seconds apart.
+        box1 = chart_box(page)
+        page.wait_for_timeout(4000)
+        box2 = chart_box(page)
+        check("the chart canvas has a sane box",
+              bool(box1) and 120 <= box1["h"] <= 400 and box1["w"] >= 200,
+              str(box1))
+        check("the chart canvas is not still growing", box1 == box2,
+              f"{box1} -> {box2}")
 
         # --- the window actually contains the bands ---------------------
         note = (page.locator("#uvNote").inner_text()

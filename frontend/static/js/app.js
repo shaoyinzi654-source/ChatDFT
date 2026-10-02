@@ -1500,7 +1500,22 @@ function renderNmr(r) {
           x: {
             reverse: true,
             title: { display: true, text: 'Chemical shift (ppm)' },
-            ticks: { maxTicksLimit: 12 },
+            ticks: {
+              maxTicksLimit: 12,
+              // The labels are the raw ppm grid, so Chart.js printed every
+              // digit of every one of them -- 7.135857657177138 and
+              // 7.135857657177101 as two separate ticks.  Twelve of those in
+              // a 300 px axis overlap into a band that cannot be read.
+              // Only the *displayed* text is rounded: data.labels is left
+              // alone because the stick plugin maps shifts through it, and
+              // rounding there would collapse neighbouring grid points onto
+              // one category.
+              callback(value) {
+                const raw = this.getLabelForValue(value);
+                const n = Number(raw);
+                return Number.isFinite(n) ? n.toFixed(2) : raw;
+              },
+            },
           },
           y: {
             title: { display: true, text: 'Relative intensity' },
