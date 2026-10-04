@@ -29,17 +29,32 @@ So this gate asserts the invariants, not the implementation:
 
   1. one reader -- the planner's availability *is* the client's, and the
      planner has no configuration logic of its own;
-  2. the schema covers every job type the server actually dispatches on,
-     scanned out of ``server.py`` rather than copied;
+  2. the schema covers every job type the server actually dispatches on, and
+     says what each one produces, both scanned or rendered out of
+     ``JOB_TYPES`` rather than copied;
   3. a reply that parses but is off-schema is refused field by field, and an
      on-schema one is applied -- both directions, no network;
-  4. the reasoning-field reply shape reaches the planner;
-  5. whenever the model does not do the planning, the reply says so, in the
+  4. when the two planners read one sentence as two different jobs, the reply
+     says so, in wording the front end displays;
+  5. the reasoning-field reply shape reaches the planner;
+  6. whenever the model does not do the planning, the reply says so, in the
      wording the front end raises its warning box for -- that regex is read
      out of ``app.js``, not copied here;
-  6. over HTTP, a chat request planned by the parser must carry that note;
-  7. the live model path, asserted in whichever direction it goes: planned by
+  7. over HTTP, a chat request planned by the parser must carry that note;
+  8. the live model path, asserted in whichever direction it goes: planned by
      the model, or a fallback that names its error.
+
+Invariant 2 is the second half of a defect that was live until round 21.
+``JOB_TYPES`` maps each job type to a description and the prompt joined its
+*keys*, so the descriptions had no reader anywhere in the repository and the
+model was asked a closed-set classification with the classes undefined.  The
+job types whose names describe themselves survived it -- ``nci``, ``nto``,
+``dos`` and ``field`` were routed correctly on both runs of
+``probes/probe_routing.py`` -- and the ambiguous ones did not: not one of
+seven MEP and isosurface phrasings reached ``surfaces``, and three of the
+seven came back as a different job type on the second run.  The first version
+of that probe asked each sentence once and reported "unreachable", which was
+itself an artefact of sampling a non-deterministic planner once per case.
 
 Runs against a live server.  Usage:  python -m backend.check_planner
 """
@@ -196,6 +211,38 @@ def main() -> int:
         _bad(f"the prompt does not offer {missing}, so the model cannot route "
              f"those requests and will answer with something it was told about")
 
+    # Naming them is not defining them.  JOB_TYPES is a dict of name ->
+    # description and the prompt joined the keys, so the descriptions had no
+    # reader anywhere in the repository and the model was asked a closed-set
+    # classification with the classes undefined.  Measured consequence: the
+    # four job types whose names describe themselves (nci, nto, dos, field)
+    # were routed correctly on both runs of probes/probe_routing.py, and not
+    # one of seven MEP and isosurface phrasings reached `surfaces`.  This is
+    # the assertion whose absence let that through, so it is written against
+    # the descriptions themselves rather than against a count.
+    undescribed = [k for k, v in P.JOB_TYPES.items() if v not in prompt]
+    if undescribed:
+        _bad(f"the prompt names {undescribed} but never says what they "
+             f"produce, so the model is choosing between bare identifiers")
+
+    # And it is defined in exactly one place.  The schema line used to
+    # enumerate the same names inline as well, which made the mutation harness
+    # report coverage it did not have: P2 broke the inline list, the
+    # descriptions below still carried all eighteen names, the prompt stayed
+    # correct and the two assertions above still passed.  A mutation that fires
+    # nothing is an assertion guarding nothing, and the cause was the second
+    # rendering.  The schema line points at the block now, and this holds it
+    # that way: a job name quoted above the block is the vocabulary's second
+    # copy growing back.  Scoped to the schema on purpose -- the
+    # disambiguation prose below names "compare" and "series" to settle them,
+    # and a check that read that as a copy would be reporting on prose.
+    schema_block = prompt.split("What each job_type produces:")[0]
+    copied = sorted({k for k in P.JOB_TYPES if f'"{k}"' in schema_block})
+    if copied:
+        _bad(f"the schema block names {copied} a second time; the vocabulary "
+             f"is rendered once, in the block below, and a second copy is what "
+             f"let a mutation break it with nothing to notice")
+
     # Scanned out of the dispatcher rather than listed here.  A list written
     # here would be a third copy of the vocabulary, and the whole defect was a
     # second copy that had already drifted.
@@ -259,6 +306,67 @@ def main() -> int:
     if len(FAILURES) == before:
         print("[PASS] on-schema applied, off-schema refused and reported, "
               "notes/raw not writable by the model", flush=True)
+
+    # ---- 3b. a disagreement between the two planners is reported ------
+    # There are two readers of one sentence, and they can both be reasonable
+    # and still contradict each other.  apply_llm_payload refuses a job type
+    # the server cannot dispatch, but `single_point` and `reactivity` are
+    # dispatchable, so the model can silently answer a different question from
+    # the one the parser recognised.  That is the same defect as the one this
+    # gate was written for -- two readers, one setting -- one level down, so
+    # it gets the same treatment: the disagreement has to reach the user.
+    _section("a disagreement between the two planners is reported")
+    before = len(FAILURES)
+
+    if P.job_type_note("surfaces", "surfaces"):
+        _bad("the two planners agreed and a disagreement was reported anyway")
+
+    note = P.job_type_note("surfaces", "single_point")
+    if not note:
+        _bad("the two planners disagreed and nothing was reported, so the "
+             "reply answers a different question from the one that was asked "
+             "and says nothing about it")
+    else:
+        for token in ("surfaces", "single_point"):
+            if token not in note:
+                _bad(f"the disagreement note does not name {token!r}, so a "
+                     f"reader cannot tell what the two readings were: {note!r}")
+        if pattern and not re.search(pattern, note, re.I):
+            _bad(f"the disagreement note does not match the front end's "
+                 f"display filter /{pattern}/i, so it is written and never "
+                 f"shown -- which is the silent version of this defect: "
+                 f"{note!r}")
+
+    # and the fold has to actually produce it, not merely be able to.  The
+    # premise is asserted first so a failure is attributable: this needs a
+    # sentence the keyword table is confident about.
+    parsed = P.RuleBasedPlanner().plan("MEP map of water").job_type
+    if parsed != "surfaces":
+        _bad(f"the keyword table no longer reads 'MEP map of water' as a "
+             f"surfaces job (it says {parsed!r}), so this check has no "
+             f"sentence the parser is confident about")
+
+    class _Disagreeing:
+        base = "http://example.invalid/v1"
+        key = "k"
+        model = "disagreeing-model"
+        available = True
+
+        def json(self, messages, **kw):
+            return {"job_type": "single_point"}
+
+    overridden = P.LLMPlanner(_Disagreeing()).plan("MEP map of water")
+    text = " ".join(overridden.notes)
+    if overridden.job_type != "single_point":
+        _bad(f"the model's job type was not applied at all: "
+             f"{overridden.job_type!r}")
+    elif "disagreed" not in text:
+        _bad(f"the model overrode a job type the parser was confident about "
+             f"and the reply says nothing: notes={overridden.notes!r}")
+    if len(FAILURES) == before:
+        print("[PASS] the parser and the model disagreeing about the job type "
+              "reaches the user, in the wording the front end displays",
+              flush=True)
 
     # ---- 4. the reasoning-field reply shape --------------------------
     _section("the reply shape reasoning models actually send")

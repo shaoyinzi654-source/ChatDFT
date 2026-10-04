@@ -68,6 +68,22 @@ pairs are the evidence; the counts are printed by the run, not written here:
 Not one of the seven surface phrasings matched the keyword table on either
 run, and three of them disagreed with themselves.  The four job types whose
 names are self-describing were right on both runs.
+
+**Measured again after the prompt was given the descriptions** (round 21, the
+fix this probe was written to justify): same fifteen sentences, same two runs
+each.
+
+    15 sentences x 2 runs: 15 answered the same job type every time, 0 varied
+
+Every sentence now reaches the job type the keyword table picks for it,
+including all seven surface phrasings, and including "Compare the HOMO-LUMO
+gaps of benzene, pyridine, furan and pyrrole" -- which is the sentence the
+Series pane's own empty state recommends and which used to come back as
+`compare`, leaving the pane it recommends showing its empty state.
+
+Both sets of numbers are here on purpose.  The fix is one prompt change and
+the effect is the whole table, so the pair is what shows the descriptions were
+load-bearing rather than incidental.
 """
 from __future__ import annotations
 

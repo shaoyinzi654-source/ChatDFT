@@ -307,7 +307,27 @@ into the chat box was matched by regular expressions, with nothing anywhere
 saying so. `GET /api/llm` reports what the client sees; the planner asks the
 same client, so the two cannot disagree.
 
-Three consequences worth knowing:
+**The model is told what each job means.** `agent.planner.JOB_TYPES` is a dict
+of name → description and the prompt renders it, so a closed-set classification
+is asked with the classes defined. It used to render the keys alone, which left
+every description with no reader anywhere in the repository and asked the model
+to choose between bare identifiers. The cost was measurable, and
+`probes/probe_routing.py` is the measurement: the job types whose names
+describe themselves were routed correctly on both runs, and the MEP and
+isosurface phrasings were not — several of them came back as a *different* job
+type on a second, identical run, so the same request could draw two different
+figures on two different days. With the descriptions rendered, every sentence in
+that probe reaches the job type the keyword table picks for it, on every run.
+
+The vocabulary is rendered in exactly one place. It was rendered twice — once
+in the schema line and once in the descriptions below it — and
+`backend/mutate_planner.py` is how that was found: its `P2` broke the schema
+line, the descriptions still carried every name, the prompt stayed correct and
+no assertion could tell, so the mutation fired nothing. A mutation that fires
+nothing is an assertion guarding nothing. The schema line points at the block
+now, and `backend.check_planner` holds it that way.
+
+Four consequences worth knowing:
 
 * **Every reply says who read your sentence.** The response carries
   `planner: "llm" | "local"`, and the notes carry either `planned by <model>`
@@ -321,6 +341,14 @@ Three consequences worth knowing:
   `job_type: "nmr_spectrum"` or `molecules: "water"` has that field refused and
   reported; the parser's value stands. Otherwise a job type the server cannot
   dispatch would reach the intent and surface much later as a missing branch.
+* **A disagreement between the two planners is reported.** The keyword parser
+  reads the sentence first, the model reads it again, and when the two name
+  different job types the reply carries a note saying which reading ran. The
+  model's reading is the one that runs, so a sentence the parser was confident
+  about can be answered as a different job — and a reply that answers a
+  different question from the one that was asked should say so rather than look
+  like a clean answer. The front end shows that note as a warning, and the gate
+  reads its filter out of `app.js` rather than copying it.
 
 A planning call is bounded by `PLAN_TIMEOUT` (30 s, then the parser takes over
 and says so). Measured on this endpoint the same one-line request returns in

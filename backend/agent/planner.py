@@ -759,6 +759,37 @@ PLAN_TIMEOUT = 30.0
 PLANNER_OFF_NOTE = ("language model unavailable ({reason}); the request was "
                     "parsed by the built-in keyword parser")
 
+# The sentence a reply carries when the two planners read one sentence as two
+# different jobs.  Both can be reasonable and still contradict each other --
+# the keyword table matched "MEP map" and the model answered "single_point" --
+# and the model's value is the one that runs, so without this note the user
+# gets a different figure from the one their sentence asked for and nothing
+# anywhere says why.  ``apply_llm_payload`` refuses a job type the server
+# cannot dispatch; ``single_point`` and ``reactivity`` are dispatchable, so
+# the existing cross-check accepts them and the disagreement was silent.
+#
+# The wording must not contain "unavailable" or "fallback": those are the
+# words the front end raises its *the model was not used* warning for, and
+# this is a different claim.  ``app.js`` carries the third alternative that
+# displays this one, and ``check_planner`` reads that regex out of the file
+# rather than copying it.
+JOB_TYPE_DISAGREEMENT = (
+    "the two planners disagreed: the keyword parser read this as a {parsed} "
+    "job and the model read it as {chosen}; the model's reading is the one "
+    "that ran")
+
+
+def job_type_note(parsed: str, chosen: str) -> str:
+    """The note for a disagreement between the two planners, or "" for none.
+
+    Pure, so a gate can prove both directions without a network: agreeing
+    planners must produce no note, and disagreeing ones must produce one that
+    names both readings.
+    """
+    if parsed == chosen:
+        return ""
+    return JOB_TYPE_DISAGREEMENT.format(parsed=parsed, chosen=chosen)
+
 
 def apply_llm_payload(intent: JobIntent, payload: Any) -> List[str]:
     """Fold a model reply into ``intent``; return the fields that were rejected.
@@ -895,15 +926,38 @@ class LLMPlanner:
         out.  It was typed out, and listed seven of the eighteen jobs the
         server dispatches on, so a request for a transition state, an NTO pair
         or a designed molecule could not be routed by the model at all -- it
-        could only answer with one of the seven it had been told about.  A
-        vocabulary written twice drifts; this one is written once.
+        could only answer with one of the seven it had been told about.
+
+        It is rendered in exactly one place: the name -> description block
+        below.  The schema line used to enumerate the same names inline as
+        well, and ``backend/mutate_planner.py`` showed what that costs -- its
+        P2 broke the inline list, the descriptions still carried all eighteen
+        names, the prompt was still correct and no assertion could tell, so the
+        mutation fired nothing.  A vocabulary with two renderings is one where
+        breaking either of them is invisible, so the schema line now points at
+        the block instead of repeating it.
+
+        Rendering the *keys* was only half of it.  ``JOB_TYPES`` is a dict of
+        name -> description and this function joined the keys, so the
+        descriptions had no reader anywhere in the repository and the model was
+        asked to choose between eighteen bare identifiers.  It chose well for
+        the names that describe themselves -- ``nci``, ``nto``, ``dos``,
+        ``field`` were right on both runs of ``probes/probe_routing.py`` -- and
+        badly for the ones that do not: not one of seven MEP and isosurface
+        phrasings reached ``surfaces``, and three of the seven came back as a
+        different job type on the second run.  A closed-set classification is
+        not a fair question if the classes are not defined, so they are
+        defined below.
+
+        ``JOB_TYPES`` also carries a line for each of the two pairs the model
+        got wrong, because a description alone does not settle which of two
+        overlapping jobs a sentence means.
         """
         return (
             "You convert a chemist's request into a JSON job specification for "
             "a density functional theory (DFT) code. Reply with JSON only.\n"
             "Schema:\n"
-            '{"job_type": one of ['
-            + ", ".join(f'"{k}"' for k in JOB_TYPES) + "], "
+            '{"job_type": string, one of the job types defined below, '
             '"molecule": string (name, formula, SMILES or XYZ), '
             '"molecule2": string (only for compare), '
             '"molecules": [string] (every molecule named, in order; used by '
@@ -913,6 +967,19 @@ class LLMPlanner:
             '"charge": integer, "multiplicity": integer, "nstates": integer, '
             '"field_kind": string (elf/laplacian/spin/difference), '
             '"solvation": string or null}\n'
+            "What each job_type produces:\n"
+            + "\n".join(f'  "{k}": {v}' for k, v in JOB_TYPES.items()) + "\n"
+            "Where two of them overlap, choose by what the user asked to see:\n"
+            '  "compare" is for exactly two molecules side by side.  When '
+            'three or more molecules are named in one request -- however the '
+            'sentence is worded, including "compare the gaps of A, B, C and '
+            'D" -- the answer is "series", which is the one that keeps all of '
+            'them.\n'
+            '  "surfaces" is for a picture of a 3D isosurface or of the '
+            'molecular electrostatic potential.  "field" is for a 2D contour '
+            'plot in a plane: ELF, the Laplacian, the spin density, a density '
+            'difference.  "MEP map", "electrostatic potential" and '
+            '"isosurface" are surfaces; "contour" and "slice" are field.\n'
             "Available functionals: " + ", ".join(FUNCTIONALS) + "\n"
             "Available basis sets: " + ", ".join(BASIS_SETS) + "\n"
             "If the user does not specify a method, use b3lyp/6-31g*. "
@@ -947,10 +1014,18 @@ class LLMPlanner:
                 f"LLM planner unavailable ({self.last_error}); used local parser")
             return intent
 
+        # The parser's answer is captured before the model's payload is folded
+        # in, because the fold overwrites it and then there is nothing left to
+        # compare against.  Both planners read the same sentence; when they
+        # disagree the user is owed the disagreement.
+        parsed_job = intent.job_type
         rejected = apply_llm_payload(intent, payload)
         intent.confidence = 0.9
         intent.raw = text
         intent.notes.append(f"planned by {self.model}")
+        disagreement = job_type_note(parsed_job, intent.job_type)
+        if disagreement:
+            intent.notes.append(disagreement)
         if rejected:
             intent.notes.append(
                 "the model's reply was partly off-schema and was ignored: "

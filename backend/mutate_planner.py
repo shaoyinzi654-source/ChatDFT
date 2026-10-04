@@ -16,7 +16,22 @@ time:
   P5  create_planner hands back the bare keyword parser when nothing is
       configured, so the object that knows the reason is not the one that
       answers;
-  P6  the planner stops asking its client and answers anyway.
+  P6  the planner stops asking its client and answers anyway;
+  P7  the job vocabulary is named again without saying what any of it
+      produces, which is the defect the second half of section 2 exists for;
+  P8  a disagreement between the two planners stops being reported;
+  P9  job_type_note keeps working and stops being called -- the difference
+      between an assertion that is wired and one that merely exists, which is
+      what P8 alone cannot show.
+
+P2 earned its wording the hard way.  Its first form broke the schema line's
+inline list of job names, and it fired nothing: the vocabulary was being
+rendered twice, so the descriptions block below still carried all eighteen
+names, the prompt was still correct, and every assertion in section 2 still
+passed.  A mutation that fires nothing is an assertion guarding nothing -- and
+here the cause was the second rendering, not the mutation.  The duplication is
+gone, P2 now breaks the schema block's copy on purpose, and section 2 of the
+gate holds the vocabulary to a single rendering so the copy cannot grow back.
 
 The live server must be up: the gate talks to it.  A mutation to planner.py
 does not affect the already-imported server, so section 6 (over HTTP) tests
@@ -49,10 +64,11 @@ MUTATIONS = [
        "                    and os.environ.get(\"CHATDFT_LLM_KEY\"))")]),
 
     ("P2 schema-drift",
-     "type the job vocabulary out again, seven of the eighteen",
-     [("            + \", \".join(f'\"{k}\"' for k in JOB_TYPES) + \"], \"",
-       "            + '\"single_point\",\"geometry_optimization\",\"excited_states\","
-       "\"compare\",\"scan\",\"info\",\"library\"' + \"], \"")]),
+     "type the job vocabulary out in the schema block again, seven of the "
+     "eighteen",
+     [("            '{\"job_type\": string, one of the job types defined below, '",
+       "            '{\"job_type\": one of [\"single_point\",\"geometry_optimization\","
+       "\"excited_states\",\"compare\",\"scan\",\"info\",\"library\"], '")]),
 
     ("P3 trust-the-reply",
      "apply whatever parsed, without checking the job type",
@@ -90,6 +106,27 @@ MUTATIONS = [
        "                validate=lambda p: isinstance(p, dict),\n"
        "            )",
        "            payload = {}")]),
+
+    ("P7 bare-identifiers",
+     "name the job types again without saying what any of them produce",
+     [("            \"What each job_type produces:\\n\"\n"
+       "            + \"\\n\".join(f'  \"{k}\": {v}' for k, v in JOB_TYPES.items()) + \"\\n\"",
+       "            \"What each job_type produces:\\n\"")]),
+
+    ("P8 silent-disagreement",
+     "report nothing when the parser and the model read one sentence as two "
+     "different jobs",
+     [("    if parsed == chosen:\n"
+       "        return \"\"\n"
+       "    return JOB_TYPE_DISAGREEMENT.format(parsed=parsed, chosen=chosen)",
+       "    return \"\"")]),
+
+    ("P9 unwired-disagreement",
+     "keep job_type_note able to report a disagreement, and never call it",
+     [("        disagreement = job_type_note(parsed_job, intent.job_type)\n"
+       "        if disagreement:\n"
+       "            intent.notes.append(disagreement)",
+       "        disagreement = \"\"")]),
 ]
 
 _FAIL_RE = re.compile(r"=== FAIL: (\d+) planner problem", re.M)

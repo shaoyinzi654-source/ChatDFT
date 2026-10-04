@@ -402,8 +402,13 @@ async function sendMessage(text) {
     }
 
     if (res.intent && res.intent.notes && res.intent.notes.length) {
-      // surface planner notes quietly when the parser had to infer something
-      const note = res.intent.notes.filter((n) => /unavailable|fallback/i.test(n));
+      // Planner notes the user has to see: the model was not used, or the two
+      // planners read the sentence as two different jobs and the model's
+      // reading won.  A disagreement that is not shown here is a reply that
+      // answers a different question from the one that was asked, with
+      // nothing on screen to say so.  backend/check_planner.py reads this
+      // regex out of the file rather than copying it.
+      const note = res.intent.notes.filter((n) => /unavailable|fallback|disagreed/i.test(n));
       if (note.length) {
         const warn = el('div', 'warn-box');
         warn.textContent = note.join(' ');
