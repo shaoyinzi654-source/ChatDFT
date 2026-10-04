@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChatDFT 审计 · 第 21 轮 — 没有读者的词表、两处渲染的事实、什么都没触发的变异体</title>
+<style>
+  :root {
+    --ink: #1b1f24; --muted: #5b6570; --line: #e2e6ea; --bg: #ffffff;
+    --soft: #f6f8fa; --warn: #9a5b00; --warnbg: #fdf3e3;
+    --ok: #1a7f37; --okbg: #eaf6ec; --bad: #b42318; --badbg: #fdeceb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.65 -apple-system, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", Roboto, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 28px 80px; }
+  h1 { font-size: 27px; margin: 0 0 6px; letter-spacing: -.2px; }
+  .sub { color: var(--muted); margin: 0 0 34px; font-size: 14px; }
+  h2 { font-size: 19px; margin: 42px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--line); }
+  h3 { font-size: 16px; margin: 26px 0 8px; }
+  p { margin: 10px 0; }
+  code { background: var(--soft); padding: 1px 5px; border-radius: 4px;
+    font-family: "SFMono-Regular", Consolas, monospace; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0;
+    font-size: 14px; }
+  th, td { text-align: left; padding: 9px 11px; border: 1px solid var(--line);
+    vertical-align: top; }
+  th { background: var(--soft); font-weight: 600; }
+  td.n { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    white-space: nowrap; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 12px; font-weight: 600; }
+  .t-ok { background: var(--okbg); color: var(--ok); }
+  .t-bad { background: var(--badbg); color: var(--bad); }
+  .t-warn { background: var(--warnbg); color: var(--warn); }
+  .note { background: var(--warnbg); border-left: 3px solid #f0c99a;
+    padding: 10px 14px; margin: 16px 0; font-size: 14px; }
+  .quote { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12.5px;
+    background: var(--soft); border: 1px solid var(--line); border-radius: 5px;
+    padding: 11px 13px; margin: 14px 0; white-space: pre; overflow-x: auto; }
+  ul, ol { padding-left: 24px; }
+  li { margin: 5px 0; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>ChatDFT 审计 · 第 21 轮</h1>
+<p class="sub">没有读者的词表、两处渲染的事实、以及一个什么都没触发的变异体 ·
+2026-10-04 · <code>3af656a</code></p>
+
+<p>上一轮把规划器路由这件事<b>量了</b>，但只量了、没修。本轮从那个测量结果出发：
+模型规划器在同一个句子上可以给出不同的作业类型，而七句 MEP / isosurface 措辞
+<b>没有一句</b>能到达 <code>surfaces</code>。修完之后，变异台又报出一件更安静的事——
+一个变异体触发了 <b>0</b> 条失败，而原因不在变异体。</p>
+
+<h2>缺陷 1：模型要选的词表，从来没有被定义过 <span class="tag t-bad">严重</span></h2>
+
+<h3>它是怎么来的</h3>
+
+<p><code>JOB_TYPES</code> 是一个 <code>name -&gt; description</code> 的字典，
+每个作业类型都写了一句它产出什么。而提示词是这样把它交给模型的：</p>
+
+<div class="quote">+ ", ".join(f'"{k}"' for k in JOB_TYPES) + "], "</div>
+
+<p>只 join 了<b>键</b>。于是那 18 条描述在整个仓库里<b>没有任何读者</b>——没有代码
+读它们，没有门禁检查它们，也没有文档引用它们。模型被要求在一个<b>类没有被定义</b>
+的闭集里做分类。</p>
+
+<p>这不是一个「可能有点影响」的问题，它的后果是可测的。名字本身就说明问题的类型
+答对了，名字说明不了的就答错了：</p>
+
+<div class="quote">系列  'Show me a series of ...'                series, series
+      'Compare the HOMO-LUMO gaps of ...'       compare, compare
+                  （稳定——而这正是 Series 面板空状态推荐的那句话，
+                    也就是说那个面板推荐了一句到不了它自己的话）
+表面  'Show me the MEP map of water'            single_point, surfaces
+      'Draw the electrostatic potential ...'    field, single_point
+      'Show me the electron density surface ...' single_point, field
+      'MEP map of water'                        field, field
+      'Render the electrostatic potential ...'  field, field
+      'Plot the LUMO isosurface of water'       nto, nto
+      'Visualise the HOMO of benzene'           single_point, single_point</div>
+
+<p>七句表面措辞<b>没有一句</b>落在关键词表为它选的 <code>surfaces</code> 上，其中
+三句在第二次问同一句话时给了<b>不同的答案</b>——同一个请求可以在两天里画出两张
+不同的图，而界面上没有任何东西说明发生了什么。</p>
+
+<div class="note"><b>这也是上一轮那个错误结论的来源。</b> 探针的第一版每句只问一次，
+于是把「我抽到的那一次」当成了「答案」，得出 <code>surfaces</code> 不可达。下一轮
+同一句话就路由到了 <code>surfaces</code>。结论是非确定仪器只采样一次造出来的假象，
+不是产品的缺陷——探针的缺陷伪装成了结论的缺陷。</div>
+
+<h3>修法</h3>
+
+<p>提示词渲染<b>描述</b>，并补四行拆开模型搞错的两对：<code>compare</code>（恰好两个
+分子）对 <code>series</code>（三个及以上），<code>surfaces</code>（三维等值面 /
+静电势）对 <code>field</code>（平面内的二维等值线）。</p>
+
+<p>同一支探针，同样的十五句、每句两次：</p>
+
+<div class="quote">15 sentences x 2 runs: 15 answered the same job type every time, 0 varied</div>
+
+<p>十五句全部落在关键词表为它选的那个类型上，包括那七句表面措辞，也包括 Series 面板
+空状态推荐的那句话——它现在真的会到达 <code>series</code> 了。</p>
+
+<h2>顺带修好的一半：分歧要被报告</h2>
+
+<p>两个规划器读同一句话：关键词解析器先跑（提供默认值），模型再读一遍，模型的
+<code>job_type</code> 只要服务器能派发就<b>获胜</b>。也就是说，一个解析器很确定的
+句子，可以被答成完全另一个作业——而回复看起来会像一个干净的回答。</p>
+
+<p>新增 <code>job_type_note()</code>：两边不一致时，把分歧写进 notes，说明哪个读取
+被执行了。前端把它当警告显示。</p>
+
+<div class="note"><b>措辞是被断言钉住的。</b> 这条注记<b>不能</b>用
+<code>unavailable</code> 或 <code>fallback</code>——前端正是按那两个词决定要不要弹
+「模型没被使用」的警告框，用一个相似的词会让它弹错框。所以过滤词是
+<code>disagreed</code>，而且门禁把这条正则从 <code>app.js</code> 里<b>读出来</b>，
+不复制一份——复制一份就是又一个会漂移的副本。</div>
+
+<h2>缺陷 2：一个事实渲染了两处，于是打断其中一处什么都看不见 <span class="tag t-warn">本轮最值钱</span></h2>
+
+<p>加了描述块之后，第一次跑九个变异体，结果是这样：</p>
+
+<div class="quote">  P1 second-reader   fired 8
+  P2 schema-drift    fired 0        &lt;-- NO FAILURE RAISED
+  P3 trust-the-reply fired 3
+  ...
+MUTATION PROBLEMS:
+  - P2 schema-drift: FIRED NOTHING -- the assertion guards nothing</div>
+
+<p>P2 打断的是 schema 行里的内联词表。它<b>没有报错</b>：目标文本还在、替换编译
+通过、门禁真跑了十一遍。<b>它只是什么都没触发。</b></p>
+
+<p>原因不是变异体写错了，是词表当时被渲染了<b>两处</b>：</p>
+
+<div class="quote">Schema:
+{"job_type": one of ["single_point", "geometry_optimization", ...], ...}
+                            ^^^ 第一处：内联列表（P2 打断的就是它）
+
+What each job_type produces:
+  "single_point": Single-point energy + electronic structure
+  "geometry_optimization": Geometry optimisation
+  ...
+                            ^^^ 第二处：描述块（还活着，带着全部 18 个名字）</div>
+
+<p>P2 打断第一处之后，第二处仍然带着全部 18 个名字，所以<b>提示词依然正确</b>，
+第 2 节那两条断言（每个名字都在提示词里、每条描述都在提示词里）<b>依然通过</b>。
+断言没有能力观察到那一行——它从来就没有。</p>
+
+<div class="note"><b>一个事实有两处渲染，等于打断其中任何一处都不可见。</b>
+注意它和第 19 条的区别：<code>mutation not applicable</code> 是目标文本<b>没了</b>，
+会喊出来；这里是目标文本<b>还在、替换也编译通过、却什么都没碰到</b>——更安静，
+而且看起来像覆盖。</div>
+
+<h3>修法：删掉重复的那一处，而不是放宽断言</h3>
+
+<p>schema 行改成指向下面的块，词表只剩一个载体：</p>
+
+<div class="quote">"job_type": string, one of the job types defined below,</div>
+
+<p>然后门禁新增一条断言，把它钉在「只有一处」：<b>schema 块里不许出现任何作业
+类型名</b>。这条检查<b>刻意限定在 schema 块内</b>——下面的消歧散文是<b>故意</b>点名
+<code>"compare"</code> 和 <code>"series"</code> 的，一条把散文读成副本的检查是在对
+散文报告，不是对行为报告。</p>
+
+<p>P2 改成去打断<b>那一处</b>（把 schema 行改回七名单的内联列表）。现在它触发
+1 条失败，而且<b>只有这条新断言抓得住它</b>：</p>
+
+<div class="quote">  P2 schema-drift: 1 failure(s)
+    - the schema block names ['compare', 'excited_states',
+      'geometry_optimization', 'info', 'library', 'scan', 'single_point']</div>
+
+<h2>验证</h2>
+
+<table>
+<tr><th>项目</th><th>结果</th></tr>
+<tr><td><code>backend.check_planner</code></td>
+    <td><span class="tag t-ok">PASS</span> 8 节全绿，含新增的「分歧要被报告」一节</td></tr>
+<tr><td><code>backend.mutate_planner</code></td>
+    <td><span class="tag t-ok">9/9 全部触发</span> 基线 0 条，<code>planner.py</code>
+    逐字节还原，还原后基线 0 条</td></tr>
+<tr><td><code>backend.contract</code></td>
+    <td><span class="tag t-ok">PASS</span></td></tr>
+<tr><td><code>probes/probe_routing.py</code></td>
+    <td>改前 12 句稳定 / 3 句漂移 → 改后 <b>15 句稳定 / 0 句漂移</b></td></tr>
+<tr><td>提示词长度</td><td class="n">2506 字符（删掉重复内联列表之后）</td></tr>
+</table>
+
+<p>九个变异体的触发数：</p>
+
+<div class="quote">  P1 second-reader          fired 8
+  P2 schema-drift           fired 1     &lt;-- 重写后
+  P3 trust-the-reply        fired 3
+  P4 silent-fallback        fired 2
+  P5 bare-parser            fired 1
+  P6 never-ask              fired 2
+  P7 bare-identifiers       fired 3     &lt;-- 新增
+  P8 silent-disagreement    fired 2     &lt;-- 新增
+  P9 unwired-disagreement   fired 1     &lt;-- 新增</div>
+
+<p>P7 和 P9 是这一轮特意加的两种不同缺陷：P7 是「名字在、意思不在」，
+P9 是「<code>job_type_note</code> 仍然工作、但没人调用它」——后者是 P8 单独
+证明不了的那件事：<b>接线比写下来更重要</b>。</p>
+
+<h2>刻意没改的地方</h2>
+
+<p><code>frontend/static/index.html:194</code>，Series 面板的空状态推荐
+「compare the HOMO-LUMO gaps of benzene, pyridine, furan and pyrrole」。修之前这句
+话会路由到 <code>compare</code>（一个只显示两个分子的面板），也就是说<b>面板推荐了
+一句永远填不满它自己的话</b>。修之后它稳定路由到 <code>series</code>，不再误导。
+改它反而会让探针里记录这个修复的那条用例失效，所以留着。</p>
+
+<h2>顺带观察（未处理）</h2>
+
+<div class="note">跑 <code>backend.contract</code> 会让<b>已跟踪</b>的
+<code>data/designs/</code> 轮换一条：删掉一个、新增一个，总数仍是 40。也就是说
+<b>门禁会改动仓库里被跟踪的数据文件</b>——跑一次门禁，工作区就脏了。本轮把这次
+轮换还原了，使提交只含修复本身。<b>门禁不该把仓库弄脏</b>，值得单独看一眼。</div>
+
+<h2>本轮结论</h2>
+
+<p>两个缺陷是同一件事的两面：<b>一个事实被写在了两处</b>。第一处是
+<code>JOB_TYPES</code> 的键和描述——描述写好了却没人读，模型只能看见名字；
+第二处是提示词里的词表——渲染两遍，于是打断一遍不可见。</p>
+
+<p>两处都不是靠「更仔细地读代码」发现的，都是靠<b>让断言真的响一次</b>发现的：
+第一处是探针（同一句问两次，看它抖不抖），第二处是变异台（打断一处，看有没有
+东西响）。</p>
+
+</main>
+</body>
+</html>
