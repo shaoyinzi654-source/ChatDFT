@@ -1,19 +1,38 @@
 # ChatDFT
 
-**A Windows workbench for molecular modeling, remote PySCF calculations, and reproducible analysis.**
+**Scientific computing for chemistry on Windows.** Build molecules in 3D, run PySCF calculations, and export reproducible results.
 
-[Download Windows 5.8.0](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip) · [Releases](https://github.com/shaoyinzi654-source/ChatDFT/releases) · [中文](README.md)
+**[Download Windows 5.8.0](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip)** · [Workflow guide](docs/workflow.md) · [中文](README.md)
 
-[![ChatDFT 5.8.0 showing a completed PySCF job for a hydrated CO₂–monoethanolamine cluster](docs/images/workbench-5.8.png)](docs/images/workbench-5.8.png)
+[![ChatDFT showing a completed PySCF calculation for a hydrated CO₂–monoethanolamine cluster. Open the full-size screenshot.](docs/images/repository-cover.png)](docs/images/workbench-5.8.png)
 
-Use SMILES, XYZ, nonperiodic XSD, or an AI prompt to build a 3D molecule or cluster. Submit a single-point energy, geometry optimization, frequency, or vertical excitation job to your PySCF server over SSH. Job history restores the matching structure and outputs. Automatic mode packages data, figures, and reports from the calculation results.
+### Workbench gallery
 
-## Get started
+<p>
+  <a href="docs/images/cluster-comparison.png"><img src="docs/images/cluster-comparison.png" width="48%" alt="Two views of the same PDC–magnesium hydration cluster"></a>
+  <a href="docs/images/project-library.png"><img src="docs/images/project-library.png" width="48%" alt="Project library with archived jobs"></a>
+  <a href="docs/images/calculation-output.png"><img src="docs/images/calculation-output.png" width="48%" alt="SCF energy, atomic charges and frontier orbital energies"></a>
+  <a href="docs/images/ai-report.png"><img src="docs/images/ai-report.png" width="48%" alt="AI analysis report in the desktop app"></a>
+</p>
 
-1. Extract the Windows ZIP and install 64-bit Python 3.13.
-2. In the extracted directory, run `.\Install-ChatDFT.ps1` in PowerShell. Open the ChatDFT desktop shortcut.
-3. Select **构建 → 从 SMILES 建模** (Build from SMILES) and enter `O` to create a water molecule. For remote calculations, configure your SSH host, username, trusted server fingerprint, and PySCF Python path under **计算 → 连接与模型设置** (Connection and model settings).
+[Full gallery and feature list](README.md#实机图集) · [View exported geometry](docs/images/hydrated-cluster-geometry.png) · [View the fragment charge figure](docs/images/fragment-charge.png)
 
-AI-assisted features can use a signed-in local Codex CLI or a compatible API. The Windows app handles modeling and analysis. PySCF jobs run on the configured Linux server. The optional PDC molecular dynamics workflow uses GROMACS and requires the original research parameters. [PDC guide](standalone/PDC-MD-GUIDE.md)
+### Model, calculate, and share results
 
-The [standalone application](standalone/) is the current edition. See the [workflow guide](docs/workflow.md) for examples or the [browser archive](legacy/browser/) for the earlier edition. Application code is distributed under the terms in [LICENSE](LICENSE). Third-party components and research parameters have their own terms. [Third-party notices](standalone/OPEN_SOURCE.md)
+**Model** · Build molecules or clusters from SMILES, XYZ, nonperiodic XSD, or an AI prompt. Edit coordinates and compare geometries in 3D.
+
+**Calculate** · Submit single-point, optimization, frequency, or vertical excitation jobs to a PySCF server over SSH and follow their progress.
+
+**Export** · Keep raw results, coordinates, CSV tables, PNG and SVG figures, and reports. Reopen any saved job from the project library.
+
+### Install and run
+
+1. Extract the [Windows package](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip) and install **64-bit Python 3.13**.
+2. Run `.\Install-ChatDFT.ps1` in PowerShell from the extracted folder, then open the ChatDFT desktop shortcut.
+3. Choose **构建 → 从 SMILES 建模** (Build from SMILES) and enter `O` to view water. Configure your PySCF server under **计算 → 连接与模型设置** (Connection and model settings) before submitting a job.
+
+### Project links
+
+[Windows source](standalone/) · [Releases](https://github.com/shaoyinzi654-source/ChatDFT/releases) · [PDC simulations](standalone/PDC-MD-GUIDE.md) · [Browser archive](legacy/browser/) · [License](LICENSE)
+
+[Project website](https://chatdft.com/) · [Report an issue](https://github.com/shaoyinzi654-source/ChatDFT/issues) · [Third-party notices](standalone/OPEN_SOURCE.md)
