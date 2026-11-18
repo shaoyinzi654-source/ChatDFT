@@ -22,6 +22,12 @@
 
 同一构型在两个视窗使用不同的显示方式。球棍图适合查看成键关系，空间填充图用于观察原子占据的空间。
 
+### 水二聚体测距
+
+[![工作台对水二聚体中的 O···O 距离进行测量，读数为 2.9000 Å。](images/water-dimer-measurement.png)](images/water-dimer-measurement.png)
+
+[打开水二聚体示例与坐标](examples/water-dimer/)
+
 ### 导出的三维结构
 
 [![根据 XYZ 坐标导出的 CO₂–单乙醇胺水合簇结构图。](images/hydrated-cluster-geometry.png)](images/hydrated-cluster-geometry.png)
@@ -29,6 +35,12 @@
 结构图可和 XYZ 坐标一起保留，便于从计算输入重新绘制。
 
 ## 计算与分析
+
+### PySCF 输入
+
+[![计算面板显示水二聚体的气相 HF/STO-3G 单点能设置。](images/pyscf-job-setup.png)](images/pyscf-job-setup.png)
+
+在提交窗口核对结构、方法、基组和分子状态后，再提交服务器。
 
 ### CO₂–单乙醇胺水合簇单点计算
 
