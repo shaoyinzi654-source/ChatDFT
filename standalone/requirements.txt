@@ -1,0 +1,9 @@
+PySide6-Essentials==6.8.2.1
+PySide6-QtAds==4.3.1.4
+qtawesome==1.4.2
+rdkit==2026.9.2
+requests==2.34.2
+paramiko==5.1.0
+mdtraj>=1.10,<2
+scipy>=1.13,<2
+matplotlib>=3.9,<4
