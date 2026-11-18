@@ -9,46 +9,32 @@
 
 <p align="center">
   <strong><a href="https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip">下载 Windows 5.8.0</a></strong>
+  &nbsp;·&nbsp; <a href="#复杂体系演示">复杂体系</a>
   &nbsp;·&nbsp; <a href="#安装与上手">安装与上手</a>
   &nbsp;·&nbsp; <a href="#实算案例">实算案例</a>
   &nbsp;·&nbsp; <a href="#文档与支持">文档</a>
   &nbsp;·&nbsp; <a href="README.en.md">English</a>
 </p>
 
-[![水二聚体入门示例。左侧为实际测距界面，右侧为气相 HF/STO-3G 作业设置。](docs/images/water-dimer-overview.png)](#安装与上手)
+[![186 原子 PDC–镁显式水组装的球棍、空间填充与棍状视图](docs/images/pdc-hydration-assembly.png)](#复杂体系演示)
 
-## 从结构到计算结果
+**PDC–镁显式水组装** · 186 个原子 · 42 个组分。左侧是球棍视图，右侧是空间填充和棍状视图。
 
-在本地载入结构，设定方法与体系参数，经 SSH 提交 PySCF 作业。结果同步回工作台后，可对照初始与结果结构、查看数值和收敛曲线，并从项目库打开归档文件。
+[下载 ChatDFT 项目](docs/examples/pdc-hydration-assembly/pdc-hydration.chatdft.json?raw=1) · [下载 XYZ 坐标](docs/examples/pdc-hydration-assembly/pdc-hydration.xyz?raw=1) · [查看配方和旋转演示](docs/examples/pdc-hydration-assembly/)
 
-[![本地建模 → 设置作业 → SSH 提交 PySCF → 分析结果 → 项目归档](docs/images/workflow-zh.png)](#功能与工作流)
+## 复杂体系演示
 
-| 你想做什么 | 从这里开始 |
+### PDC²⁻、Mg²⁺ 与显式水
+
+六个 PDC²⁻、六个 Mg²⁺ 与三十个水分子组成电中性的单重态初始构型。项目保存了组分、键连接和配方。打开后可以切换显示方式、按原子核查接触距离，并从这份结构继续准备自己的计算。
+
+| 组装步骤 | 已核对的初始几何 |
 | --- | --- |
-| 第一次打开 ChatDFT | [安装并跑一个水二聚体作业](#安装与上手) |
-| 看一份已完成作业的输入与输出 | [CO₂–单乙醇胺水合簇](#实算案例) |
-| 确认任务、格式或工具是否适用 | [功能与工作流](#功能与工作流) |
-| 查服务器设置、输出文件或论文复现 | [文档与支持](#文档与支持) |
+| 放置 PDC | 两组分子的重原子拟合平面按法向分隔 3.60 Å |
+| 加入镁离子 | 五组 PDC 氧与镁的指定距离为 2.25 Å |
+| 加入显式水 | 五组水氧与镁的指定距离为 2.30 Å |
 
-## 安装与上手
-
-1. 安装 **64 位 Python 3.13**，下载并解压 [Windows 5.8.0 ZIP](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip)。
-2. 在解压目录打开 PowerShell，运行下列命令，然后打开桌面的 **ChatDFT** 快捷方式。
-
-   ```powershell
-   .\Install-ChatDFT.ps1
-   ```
-
-3. 通过 **文件 → 导入结构** 打开水二聚体 XYZ。选择两个氧原子，核对 O···O 初始间距 **2.9000 Å**。
-4. 要提交作业，在 **计算 → 连接与模型设置** 填写 SSH 和服务器上的 PySCF Python 路径，再设置 **气相 HF/STO-3G 单点能**，电荷 0，多重度 1。
-
-<p>
-  <a href="docs/images/water-dimer-measurement.png"><img src="docs/images/water-dimer-measurement.png" width="48%" alt="ChatDFT 中测量水二聚体的 2.9000 Å 氧间距"></a>
-  &nbsp;
-  <a href="docs/images/pyscf-job-setup.png"><img src="docs/images/pyscf-job-setup.png" width="48%" alt="同一个水二聚体的 HF/STO-3G 单点能设置"></a>
-</p>
-
-[下载示例 XYZ](docs/examples/water-dimer/water-dimer.xyz?raw=1) · [水二聚体操作步骤](docs/examples/water-dimer/)
+[打开完整案例与 360° 旋转](docs/examples/pdc-hydration-assembly/) · [在另一份作业里查看已算出的结果](#实算案例)
 
 ## 实算案例
 
@@ -75,13 +61,24 @@
 
 [查看图集中的作业图件](docs/gallery.md#计算与分析) · [查看完整 SCF、电荷和轨道图](docs/images/calculation-output.png)
 
+## 从结构到计算结果
+
+在本地载入结构，设定方法与体系参数，经 SSH 提交 PySCF 作业。结果同步回工作台后，可对照初始与结果结构、查看数值和收敛曲线，并从项目库打开归档文件。
+
+| 你想做什么 | 从这里开始 |
+| --- | --- |
+| 想检查复杂组装 | [先打开 186 原子项目](#复杂体系演示) |
+| 看一份已完成作业的输入与输出 | [CO₂–单乙醇胺水合簇](#实算案例) |
+| 确认任务、格式或工具是否适用 | [功能与工作流](#功能与工作流) |
+| 查服务器设置、输出文件或论文复现 | [文档与支持](#文档与支持) |
+
 ## 功能与工作流
 
 ### 分子建模
 
 用 SMILES 生成三维构象，或导入 XYZ、非周期 XSD。可以调整原子坐标、电荷与多重度，给多片段体系设置初始间距，再测量距离、角度或二面角。双视图可以固定对照结构，并分别切换球棍、棍状、线框和空间填充样式。
 
-[![PDC–镁水合簇在双视图中显示球棍与空间填充两种样式。](docs/images/pdc-dual-view.png)](docs/gallery.md#视角演示)
+[双结构对照操作与示例](docs/gallery.md#视角演示)
 
 ### 量子化学计算
 
@@ -125,6 +122,19 @@
 ## 实机图集
 
 [双视图旋转演示](docs/gallery.md#视角演示) · [建模与测距](docs/gallery.md#建模--modeling) · [计算与分析](docs/gallery.md#计算与分析) · [项目库与报告](docs/gallery.md#项目与报告)
+
+## 安装与上手
+
+1. 安装 **64 位 Python 3.13**，下载并解压 [Windows 5.8.0 ZIP](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip)。
+2. 在解压目录打开 PowerShell，运行下列命令，然后打开桌面的 **ChatDFT** 快捷方式。
+
+   ```powershell
+   .\Install-ChatDFT.ps1
+   ```
+
+3. 在 **计算 → 连接与模型设置** 配置 SSH 和服务器上的 PySCF Python 路径。
+
+[水二聚体操作步骤](docs/examples/water-dimer/) · [先打开 186 原子项目](#复杂体系演示)
 
 ## 文档与支持
 

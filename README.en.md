@@ -9,46 +9,32 @@
 
 <p align="center">
   <strong><a href="https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip">Download Windows 5.8.0</a></strong>
+  &nbsp;·&nbsp; <a href="#complex-system-demos">Complex examples</a>
   &nbsp;·&nbsp; <a href="#getting-started">Getting started</a>
   &nbsp;·&nbsp; <a href="#completed-calculation">Completed calculation</a>
   &nbsp;·&nbsp; <a href="#documentation-and-support">Documentation</a>
   &nbsp;·&nbsp; <a href="README.md">中文</a>
 </p>
 
-[![Water dimer quickstart with the measured geometry and gas-phase HF/STO-3G job settings.](docs/images/water-dimer-overview.png)](#getting-started)
+[![Ball-and-stick, space-filling, and stick views of the 186-atom PDC–magnesium hydration assembly](docs/images/pdc-hydration-assembly.png)](#complex-system-demos)
 
-## From structure to results
+**PDC–magnesium hydration assembly** · 186 atoms · 42 fragments. Ball-and-stick at left, space-filling and stick views at right.
 
-Load a structure locally, choose calculation settings, and submit a PySCF job over SSH. When results sync back, compare geometries, review convergence and numerical output, and reopen the job files from the project library.
+[Download ChatDFT project](docs/examples/pdc-hydration-assembly/pdc-hydration.chatdft.json?raw=1) · [Download XYZ](docs/examples/pdc-hydration-assembly/pdc-hydration.xyz?raw=1) · [View the recipe and rotation](docs/examples/pdc-hydration-assembly/)
 
-[![Build a model, set up a job, run PySCF over SSH, inspect the results, and archive the job.](docs/images/workflow-en.png)](#features-and-workflows)
+## Complex-system demos
 
-| If you want to… | Start here |
+### PDC dianions, magnesium, and explicit water
+
+Six PDC dianions, six Mg²⁺ ions, and 30 water molecules form a neutral singlet starting geometry. The project retains the fragment identities, bonds, and assembly recipe. Open it to change representations, check atom-to-atom distances, and prepare a calculation at your chosen level of theory.
+
+| Assembly step | Verified starting geometry |
 | --- | --- |
-| Try ChatDFT for the first time | [Install and run a water dimer job](#getting-started) |
-| Follow a completed job from input to output | [CO₂–monoethanolamine cluster](#completed-calculation) |
-| Check a supported task, format, or tool | [Features and workflows](#features-and-workflows) |
-| Find server settings, output files, or the paper workflow | [Documentation and support](#documentation-and-support) |
+| Arrange PDC | Two heavy-atom plane pairs with normal separations of 3.60 Å |
+| Add magnesium | Five specified PDC oxygen to Mg distances of 2.25 Å |
+| Add explicit water | Five specified water oxygen to Mg distances of 2.30 Å |
 
-## Getting started
-
-1. Install **64-bit Python 3.13**, then download and extract the [Windows 5.8.0 ZIP](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip).
-2. Open PowerShell in the extracted folder and run the installer. Launch **ChatDFT** from the desktop shortcut.
-
-   ```powershell
-   .\Install-ChatDFT.ps1
-   ```
-
-3. Import the water dimer XYZ from the File menu. Select both oxygen atoms and check the starting O···O distance of **2.9000 Å**.
-4. To submit the job, set up SSH and the server's PySCF Python path under **计算 → 连接与模型设置**. Choose **gas-phase HF/STO-3G single-point energy**, charge 0, and spin multiplicity 1.
-
-<p>
-  <a href="docs/images/water-dimer-measurement.png"><img src="docs/images/water-dimer-measurement.png" width="48%" alt="Measuring the 2.9000 Å O–O distance in the water dimer"></a>
-  &nbsp;
-  <a href="docs/images/pyscf-job-setup.png"><img src="docs/images/pyscf-job-setup.png" width="48%" alt="HF/STO-3G gas-phase single-point settings for the same dimer"></a>
-</p>
-
-[Download the example XYZ](docs/examples/water-dimer/water-dimer.xyz?raw=1) · [Water dimer walkthrough](docs/examples/water-dimer/)
+[Open the case and 360° rotation](docs/examples/pdc-hydration-assembly/) · [Inspect a separate completed calculation](#completed-calculation)
 
 ## Completed calculation
 
@@ -75,13 +61,24 @@ The left panel shows the XYZ geometry. The right panel groups Mulliken atomic ch
 
 [Find the job figures in the gallery](docs/gallery.md#计算与分析) · [Full SCF, charge, and orbital plots](docs/images/calculation-output.png)
 
+## From structure to results
+
+Load a structure locally, choose calculation settings, and submit a PySCF job over SSH. When results sync back, compare geometries, review convergence and numerical output, and reopen the job files from the project library.
+
+| If you want to… | Start here |
+| --- | --- |
+| Inspect a multi-fragment structure | [Open the 186-atom project](#complex-system-demos) |
+| Follow a completed job from input to output | [CO₂–monoethanolamine cluster](#completed-calculation) |
+| Check a supported task, format, or tool | [Features and workflows](#features-and-workflows) |
+| Find server settings, output files, or the paper workflow | [Documentation and support](#documentation-and-support) |
+
 ## Features and workflows
 
 ### Molecular modeling
 
 Generate 3D conformers from SMILES or import XYZ and nonperiodic XSD. Edit atomic coordinates, charge, and multiplicity, set initial distances in multi-fragment structures, and measure distances, angles, and dihedrals. Pin a comparison structure and switch each view between ball-and-stick, sticks, wireframe, and space filling.
 
-[![The PDC–magnesium cluster in ball-and-stick and space-filling views.](docs/images/pdc-dual-view.png)](docs/gallery.md#视角演示)
+[Dual-view walkthrough](docs/gallery.md#视角演示)
 
 ### Quantum chemistry
 
@@ -125,6 +122,19 @@ The molecular paper workflow can extract methods, basis sets, molecular settings
 ## Gallery
 
 [Rotation demo](docs/gallery.md#视角演示) · [Modeling and measurement](docs/gallery.md#建模--modeling) · [Calculation and analysis](docs/gallery.md#计算与分析) · [Project library and report](docs/gallery.md#项目与报告)
+
+## Getting started
+
+1. Install **64-bit Python 3.13**, then download and extract the [Windows 5.8.0 ZIP](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip).
+2. Open PowerShell in the extracted folder and run the installer. Launch **ChatDFT** from the desktop shortcut.
+
+   ```powershell
+   .\Install-ChatDFT.ps1
+   ```
+
+3. Configure SSH and the server’s PySCF Python path under **计算 → 连接与模型设置**.
+
+[Water dimer walkthrough](docs/examples/water-dimer/) · [Open the 186-atom project](#complex-system-demos)
 
 ## Documentation and support
 

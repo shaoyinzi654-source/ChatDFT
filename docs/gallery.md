@@ -2,6 +2,14 @@
 
 [仓库首页](../README.md) · [English README](../README.en.md) · [全自动计算指南](workflow.md)
 
+## 186 原子 PDC–镁显式水组装
+
+[![球棍、空间填充与棍状视图展示同一个 PDC–镁显式水组装。](images/pdc-hydration-assembly.png)](examples/pdc-hydration-assembly/)
+
+6 个 PDC²⁻、6 个 Mg²⁺、30 个显式水。案例包含可打开的原生项目、XYZ、建模约束和旋转演示。
+
+[查看案例与文件](examples/pdc-hydration-assembly/)
+
 ## 视角演示
 
 同一个 PDC–镁水合簇在双视图中旋转。左侧球棍图保留成键关系，右侧空间填充图展示相同构型的占据空间。
