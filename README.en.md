@@ -21,13 +21,7 @@
 
 Load a structure locally, choose calculation settings, and submit a PySCF job over SSH. When results sync back, compare geometries, review convergence and numerical output, and reopen the job files from the project library.
 
-```mermaid
-flowchart LR
-    A["Build a model<br/>SMILES · XYZ · XSD"] --> B["Set up the job<br/>Method · basis · charge · spin"]
-    B --> C["SSH → PySCF<br/>Queue · run · sync"]
-    C --> D["Inspect results<br/>SCF · geometry · charges"]
-    D --> E["Archive<br/>Coordinates · data · figures · reports"]
-```
+[![Build a model, set up a job, run PySCF over SSH, inspect the results, and archive the job.](docs/images/workflow-en.png)](#features-and-workflows)
 
 | If you want to… | Start here |
 | --- | --- |
