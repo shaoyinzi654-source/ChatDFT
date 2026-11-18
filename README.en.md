@@ -1,30 +1,10 @@
-<h1 align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/wordmark-paper.png">
-    <img alt="ChatDFT" src="standalone/runtime/assets/chatdft-wordmark.png" width="280">
-  </picture>
-</h1>
+[![ChatDFT, a Windows workbench for molecular modeling and quantum chemistry, with a rendering of the 186-atom PDC–magnesium hydration assembly.](docs/images/workbench-cover-en.webp)](#complex-system-demos)
 
-<p align="center"><strong>A Windows workbench for molecular modeling, PySCF jobs, and result analysis</strong></p>
+**[Download Windows 5.8.0](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip)** · [Open the demo](#complex-system-demos) · [See a completed job](#completed-calculation) · [Documentation](#documentation-and-support) · [中文](README.md)
 
-<p align="center">
-  <strong><a href="https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip">Download Windows 5.8.0</a></strong>
-  &nbsp;·&nbsp; <a href="#complex-system-demos">Complex examples</a>
-  &nbsp;·&nbsp; <a href="#getting-started">Getting started</a>
-  &nbsp;·&nbsp; <a href="#completed-calculation">Completed calculation</a>
-  &nbsp;·&nbsp; <a href="#documentation-and-support">Documentation</a>
-  &nbsp;·&nbsp; <a href="README.md">中文</a>
-</p>
-
-[![Ball-and-stick, space-filling, and stick views of the 186-atom PDC–magnesium hydration assembly](docs/images/pdc-hydration-assembly.png)](#complex-system-demos)
-
-**PDC–magnesium hydration assembly** · 186 atoms · 42 fragments. Ball-and-stick at left, space-filling and stick views at right.
-
-[Download ChatDFT project](docs/examples/pdc-hydration-assembly/pdc-hydration.chatdft.json?raw=1) · [Download XYZ](docs/examples/pdc-hydration-assembly/pdc-hydration.xyz?raw=1) · [View the recipe and rotation](docs/examples/pdc-hydration-assembly/)
+Import or assemble molecules, submit PySCF jobs over SSH, and archive geometries, values, figures, and reports.
 
 ## Complex-system demos
-
-### PDC dianions, magnesium, and explicit water
 
 Six PDC dianions, six Mg²⁺ ions, and 30 water molecules form a neutral singlet starting geometry. The project retains the fragment identities, bonds, and assembly recipe. Open it to change representations, check atom-to-atom distances, and prepare a calculation at your chosen level of theory.
 
@@ -34,7 +14,14 @@ Six PDC dianions, six Mg²⁺ ions, and 30 water molecules form a neutral single
 | Add magnesium | Five specified PDC oxygen to Mg distances of 2.25 Å |
 | Add explicit water | Five specified water oxygen to Mg distances of 2.30 Å |
 
-[Open the case and 360° rotation](docs/examples/pdc-hydration-assembly/) · [Inspect a separate completed calculation](#completed-calculation)
+[Download the ChatDFT project](docs/examples/pdc-hydration-assembly/pdc-hydration.chatdft.json?raw=1) · [Download XYZ](docs/examples/pdc-hydration-assembly/pdc-hydration.xyz?raw=1) · [Recipe and rotation](docs/examples/pdc-hydration-assembly/)
+
+<details>
+<summary>Compare ball-and-stick, space-filling, and stick views in ChatDFT</summary>
+
+[![Three representations of the same structure in the ChatDFT workbench](docs/images/pdc-hydration-assembly.png)](docs/images/pdc-hydration-assembly.png)
+
+</details>
 
 ## Completed calculation
 

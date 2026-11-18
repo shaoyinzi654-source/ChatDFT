@@ -1,30 +1,10 @@
-<h1 align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/wordmark-paper.png">
-    <img alt="ChatDFT" src="standalone/runtime/assets/chatdft-wordmark.png" width="280">
-  </picture>
-</h1>
+[![ChatDFT Windows 分子建模与量子化学工作台。右侧为从项目坐标渲染的 186 原子 PDC–镁显式水组装。](docs/images/workbench-cover-zh.webp)](#复杂体系演示)
 
-<p align="center"><strong>分子建模、PySCF 计算与结果分析的 Windows 工作台</strong></p>
+**[下载 Windows 5.8.0](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip)** · [打开演示](#复杂体系演示) · [看实算结果](#实算案例) · [使用文档](#文档与支持) · [English](README.en.md)
 
-<p align="center">
-  <strong><a href="https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip">下载 Windows 5.8.0</a></strong>
-  &nbsp;·&nbsp; <a href="#复杂体系演示">复杂体系</a>
-  &nbsp;·&nbsp; <a href="#安装与上手">安装与上手</a>
-  &nbsp;·&nbsp; <a href="#实算案例">实算案例</a>
-  &nbsp;·&nbsp; <a href="#文档与支持">文档</a>
-  &nbsp;·&nbsp; <a href="README.en.md">English</a>
-</p>
-
-[![186 原子 PDC–镁显式水组装的球棍、空间填充与棍状视图](docs/images/pdc-hydration-assembly.png)](#复杂体系演示)
-
-**PDC–镁显式水组装** · 186 个原子 · 42 个组分。左侧是球棍视图，右侧是空间填充和棍状视图。
-
-[下载 ChatDFT 项目](docs/examples/pdc-hydration-assembly/pdc-hydration.chatdft.json?raw=1) · [下载 XYZ 坐标](docs/examples/pdc-hydration-assembly/pdc-hydration.xyz?raw=1) · [查看配方和旋转演示](docs/examples/pdc-hydration-assembly/)
+导入或组装分子，经 SSH 提交 PySCF 作业，查看并归档结构、数值、图件与报告。
 
 ## 复杂体系演示
-
-### PDC²⁻、Mg²⁺ 与显式水
 
 六个 PDC²⁻、六个 Mg²⁺ 与三十个水分子组成电中性的单重态初始构型。项目保存了组分、键连接和配方。打开后可以切换显示方式、按原子核查接触距离，并从这份结构继续准备自己的计算。
 
@@ -34,7 +14,14 @@
 | 加入镁离子 | 五组 PDC 氧与镁的指定距离为 2.25 Å |
 | 加入显式水 | 五组水氧与镁的指定距离为 2.30 Å |
 
-[打开完整案例与 360° 旋转](docs/examples/pdc-hydration-assembly/) · [在另一份作业里查看已算出的结果](#实算案例)
+[下载 ChatDFT 项目](docs/examples/pdc-hydration-assembly/pdc-hydration.chatdft.json?raw=1) · [下载 XYZ](docs/examples/pdc-hydration-assembly/pdc-hydration.xyz?raw=1) · [配方与旋转演示](docs/examples/pdc-hydration-assembly/)
+
+<details>
+<summary>在工作台中对照球棍、空间填充与棍状视图</summary>
+
+[![同一结构在 ChatDFT 工作台中的三种显示方式](docs/images/pdc-hydration-assembly.png)](docs/images/pdc-hydration-assembly.png)
+
+</details>
 
 ## 实算案例
 
