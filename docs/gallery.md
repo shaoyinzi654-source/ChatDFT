@@ -2,6 +2,18 @@
 
 [仓库首页](../README.md) · [English README](../README.en.md) · [全自动计算指南](workflow.md)
 
+## 视角演示
+
+同一个 PDC–镁水合簇在双视图中旋转。左侧球棍图保留成键关系，右侧空间填充图展示相同构型的占据空间。
+
+<details>
+<summary>播放 5 秒工作台演示 / Play the 5-second demo</summary>
+<br>
+<img src="images/pdc-dual-view.webp" alt="在 ChatDFT 的球棍窗口和空间填充窗口中旋转同一个 PDC–镁水合簇。">
+</details>
+
+[查看静态原图](images/pdc-dual-view.png)
+
 ## 建模 / Modeling
 
 ### PDC–镁离子水合簇
@@ -16,7 +28,7 @@
 
 结构图可和 XYZ 坐标一起保留，便于从计算输入重新绘制。
 
-## 计算与分析 / Calculation and analysis
+## 计算与分析
 
 ### CO₂–单乙醇胺水合簇单点计算
 
@@ -36,7 +48,7 @@ SCF 曲线记录电子自洽迭代。Mulliken 电荷和轨道能量对应这一�
 
 用同一作业的 Mulliken 数据按片段求和，查看水、CO₂ 和单乙醇胺各自的净电荷。
 
-## 项目与报告 / Projects and reports
+## 项目与报告
 
 ### 项目库
 
