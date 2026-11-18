@@ -1,4 +1,4 @@
-[![ChatDFT Windows 分子建模与量子化学工作台。右侧为从项目坐标渲染的 186 原子 PDC–镁显式水组装。](docs/images/workbench-cover-zh.webp)](#复杂体系演示)
+[![ChatDFT Windows 分子建模与量子化学工作台。右侧为从项目坐标渲染的 186 原子 PDC–镁显式水组装。](docs/images/chatdft-cover-zh.webp)](#复杂体系演示)
 
 **[下载 Windows 5.8.0](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip)** · [打开演示](#复杂体系演示) · [看实算结果](#实算案例) · [使用文档](#文档与支持) · [English](README.en.md)
 

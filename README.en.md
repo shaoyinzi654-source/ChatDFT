@@ -1,4 +1,4 @@
-[![ChatDFT, a Windows workbench for molecular modeling and quantum chemistry, with a rendering of the 186-atom PDC–magnesium hydration assembly.](docs/images/workbench-cover-en.webp)](#complex-system-demos)
+[![ChatDFT, a Windows workbench for molecular modeling and quantum chemistry, with a rendering of the 186-atom PDC–magnesium hydration assembly.](docs/images/chatdft-cover-en.webp)](#complex-system-demos)
 
 **[Download Windows 5.8.0](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip)** · [Open the demo](#complex-system-demos) · [See a completed job](#completed-calculation) · [Documentation](#documentation-and-support) · [中文](README.md)
 
