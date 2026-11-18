@@ -1,38 +1,37 @@
 # ChatDFT
 
-**Scientific computing for chemistry on Windows.** Build molecules in 3D, run PySCF calculations, and export reproducible results.
+ChatDFT is a Windows workbench for molecular modeling and computational chemistry. Build molecules and hydrated clusters, submit jobs to PySCF, and inspect or export the results.
 
-**[Download Windows 5.8.0](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip)** · [Workflow guide](docs/workflow.md) · [中文](README.md)
+[**Download Windows 5.8.0**](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip) · [Getting started](#getting-started) · [Gallery](docs/gallery.md) · [中文](README.md)
 
-[![ChatDFT showing a completed PySCF calculation for a hydrated CO₂–monoethanolamine cluster. Open the full-size screenshot.](docs/images/repository-cover.png)](docs/images/workbench-5.8.png)
+[![ChatDFT 5.8.0 showing a hydrated CO₂–monoethanolamine cluster, calculation results, and the job list.](docs/images/workbench-5.8.png)](docs/images/workbench-5.8.png)
 
-### Workbench gallery
+*The hydrated CO₂–monoethanolamine cluster and its single-point calculation in ChatDFT 5.8.0.*
 
-<p>
-  <a href="docs/images/cluster-comparison.png"><img src="docs/images/cluster-comparison.png" width="48%" alt="Two views of the same PDC–magnesium hydration cluster"></a>
-  <a href="docs/images/project-library.png"><img src="docs/images/project-library.png" width="48%" alt="Project library with archived jobs"></a>
-  <a href="docs/images/calculation-output.png"><img src="docs/images/calculation-output.png" width="48%" alt="SCF energy, atomic charges and frontier orbital energies"></a>
-  <a href="docs/images/ai-report.png"><img src="docs/images/ai-report.png" width="48%" alt="AI analysis report in the desktop app"></a>
-</p>
+## Getting started
 
-[Full gallery and feature list](README.md#实机图集) · [View exported geometry](docs/images/hydrated-cluster-geometry.png) · [View the fragment charge figure](docs/images/fragment-charge.png)
+1. Install **64-bit Python 3.13** and extract the ChatDFT Windows package.
+2. Run `.Install-ChatDFT.ps1` in PowerShell from the extracted directory, then open the desktop shortcut.
+3. Choose **构建 → 从 SMILES 建模** (Build from SMILES) and enter `O` to view a water molecule. To run a calculation, first configure your PySCF server under **计算 → 连接与模型设置** (Connection and Model Settings).
 
-### Model, calculate, and share results
+[First calculation guide (Chinese)](docs/workflow.md#提交作业) · [Workbench manual](standalone/README.md)
 
-**Model** · Build molecules or clusters from SMILES, XYZ, nonperiodic XSD, or an AI prompt. Edit coordinates and compare geometries in 3D.
+## Features
 
-**Calculate** · Submit single-point, optimization, frequency, or vertical excitation jobs to a PySCF server over SSH and follow their progress.
+- **Modeling** — Build from SMILES, XYZ, or nonperiodic XSD. Assemble molecules, ions, and explicit water. Edit coordinates, measure distances and angles, and compare structures side by side.
+- **Quantum chemistry** — Submit PySCF single-point, geometry optimization, harmonic frequency, and vertical excitation jobs over SSH. Use gas-phase or IEF-PCM solvent settings.
+- **Jobs and results** — Follow queue status, progress, and logs. Reopen archived structures and results. Save XYZ, JSON, CSV, PNG, SVG, and Markdown per project.
+- **Automation** — Use local Codex or a compatible API to plan structures and jobs. The assistant can ask for missing inputs and prepare additional figures or reports from completed calculations.
+- **Papers and periodic systems** — Extract modeling and calculation conditions from papers. The [GROMACS guide](standalone/PDC-MD-GUIDE.md) covers building and analyzing periodic PDC solutions.
 
-**Export** · Keep raw results, coordinates, CSV tables, PNG and SVG figures, and reports. Reopen any saved job from the project library.
+## Gallery
 
-### Install and run
+[![SCF electronic energy, Mulliken atomic charges, and frontier orbital energies for the CO₂–monoethanolamine cluster.](docs/images/calculation-output.png)](docs/images/calculation-output.png)
 
-1. Extract the [Windows package](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip) and install **64-bit Python 3.13**.
-2. Run `.\Install-ChatDFT.ps1` in PowerShell from the extracted folder, then open the ChatDFT desktop shortcut.
-3. Choose **构建 → 从 SMILES 建模** (Build from SMILES) and enter `O` to view water. Configure your PySCF server under **计算 → 连接与模型设置** (Connection and model settings) before submitting a job.
+*Three plots from the same job. The energy trace shows convergence over SCF iterations.*
 
-### Project links
+[View all 7 images](docs/gallery.md) · [Output files (Chinese)](docs/workflow.md#查看输出)
 
-[Windows source](standalone/) · [Releases](https://github.com/shaoyinzi654-source/ChatDFT/releases) · [PDC simulations](standalone/PDC-MD-GUIDE.md) · [Browser archive](legacy/browser/) · [License](LICENSE)
+## Project links
 
-[Project website](https://chatdft.com/) · [Report an issue](https://github.com/shaoyinzi654-source/ChatDFT/issues) · [Third-party notices](standalone/OPEN_SOURCE.md)
+[Source](standalone/) · [Releases](https://github.com/shaoyinzi654-source/ChatDFT/releases) · [Issues](https://github.com/shaoyinzi654-source/ChatDFT/issues) · [Website](https://chatdft.com/) · [License](LICENSE) · [Third-party notices](standalone/OPEN_SOURCE.md) · [Browser archive](legacy/browser/)
