@@ -48,6 +48,8 @@
 
 图中为 40 原子、总电荷 0、单重态的簇模型。使用 PySCF 在给定构型上进行 PBE0/def2-SVP 单点计算。
 
+[在首页跟读实算案例](../README.md#实算案例)
+
 ### SCF 收敛、原子电荷与轨道
 
 [![从单点计算输出绘制的 SCF 电子能、Mulliken 原子电荷和前线轨道能级。](images/calculation-output.png)](images/calculation-output.png)
