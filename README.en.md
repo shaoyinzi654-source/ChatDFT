@@ -1,6 +1,8 @@
+# ChatDFT
+
 [![ChatDFT, a Windows workbench for molecular modeling and quantum chemistry, with a rendering of the 186-atom PDC–magnesium hydration assembly.](docs/images/chatdft-cover-en.webp)](#complex-system-demos)
 
-**[Download Windows 5.8.0](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip)** · [Open the demo](#complex-system-demos) · [See a completed job](#completed-calculation) · [Documentation](#documentation-and-support) · [中文](README.md)
+**[Download Windows 5.8.0](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip)** · [Open the demo](#complex-system-demos) · [See a completed job](#completed-calculation) · [Documentation](#documentation-and-support)
 
 Import or assemble molecules, submit PySCF jobs over SSH, and archive geometries, values, figures, and reports.
 
@@ -16,12 +18,7 @@ Six PDC dianions, six Mg²⁺ ions, and 30 water molecules form a neutral single
 
 [Download the ChatDFT project](docs/examples/pdc-hydration-assembly/pdc-hydration.chatdft.json?raw=1) · [Download XYZ](docs/examples/pdc-hydration-assembly/pdc-hydration.xyz?raw=1) · [Recipe and rotation](docs/examples/pdc-hydration-assembly/)
 
-<details>
-<summary>Compare ball-and-stick, space-filling, and stick views in ChatDFT</summary>
-
-[![Three representations of the same structure in the ChatDFT workbench](docs/images/pdc-hydration-assembly.png)](docs/images/pdc-hydration-assembly.png)
-
-</details>
+[View the molecular rendering](docs/images/chatdft-cover-en.webp)
 
 ## Completed calculation
 
@@ -29,7 +26,7 @@ Six PDC dianions, six Mg²⁺ ions, and 30 water molecules form a neutral single
 
 The archived job used a **40-atom, neutral singlet** cluster. PySCF ran a **gas-phase PBE0/def2-SVP single-point calculation** at the supplied geometry.
 
-[![ChatDFT shows the cluster geometry, values from the result, and the completed job.](docs/images/workbench-5.8.png)](docs/images/workbench-5.8.png)
+[![SCF energy, atomic charges, and frontier orbital levels for the completed PySCF job.](docs/images/calculation-output.png)](docs/images/calculation-output.png)
 
 | Action | What to inspect |
 | --- | --- |
@@ -46,7 +43,7 @@ The archived job used a **40-atom, neutral singlet** cluster. PySCF ran a **gas-
 
 The left panel shows the XYZ geometry. The right panel groups Mulliken atomic charges by molecular fragment. To assess whether the structure is stable, continue with geometry optimization and vibrational analysis.
 
-[Find the job figures in the gallery](docs/gallery.md#计算与分析) · [Full SCF, charge, and orbital plots](docs/images/calculation-output.png)
+[Find the job figures in the gallery](docs/gallery.md#calculation-and-analysis) · [Full SCF, charge, and orbital plots](docs/images/calculation-output.png)
 
 ## From structure to results
 
@@ -65,7 +62,7 @@ Load a structure locally, choose calculation settings, and submit a PySCF job ov
 
 Generate 3D conformers from SMILES or import XYZ and nonperiodic XSD. Edit atomic coordinates, charge, and multiplicity, set initial distances in multi-fragment structures, and measure distances, angles, and dihedrals. Pin a comparison structure and switch each view between ball-and-stick, sticks, wireframe, and space filling.
 
-[Dual-view walkthrough](docs/gallery.md#视角演示)
+[Hydration assembly example](docs/gallery.md#hydration-assembly)
 
 ### Quantum chemistry
 
@@ -85,9 +82,12 @@ Connect a local Codex login or a compatible API. Ask for a new structure, a geom
 <details>
 <summary>Show a copyable automation prompt</summary>
 
+>Select automated calculation mode in the AI menu before sending the prompt.
+
 ```text
-全自动：从 SMILES O 建立单个水分子，电荷 0，多重度 1。
-执行气相 HF/STO-3G 单点能，归档电子能、偶极矩、原子电荷、结构图和报告。
+Build one water molecule from SMILES O, with charge 0 and multiplicity 1.
+Run a gas-phase HF/STO-3G single-point calculation. Save the energy,
+dipole moment, atomic charges, geometry figure, and report.
 ```
 
 </details>
@@ -98,17 +98,17 @@ Connect a local Codex login or a compatible API. Ask for a new structure, a geom
 
 The job monitor shows status, method, basis, and available results. Use the project library to reopen initial and final structures, the output folder, logs, and saved reports. Base figures are archived with each job. Supplemental analysis keeps versioned figures and reports for the selected output.
 
-[![Project library with archived jobs and controls to reopen them.](docs/images/project-library.png)](docs/gallery.md#项目与报告)
+[Review the files stored with a job](docs/workflow.md#output-files)
 
 ### Papers and periodic systems
 
 The molecular paper workflow can extract methods, basis sets, molecular settings, and cited pages from PDF, TXT, or Markdown. The GROMACS workflow covers periodic PDC solution boxes, trajectories, and aggregation analysis. Check the original coordinates, force-field parameters, and conditions before reproducing a study.
 
-[Paper workflow](standalone/README.md#ai-与服务器) · [PDC molecular dynamics guide](standalone/PDC-MD-GUIDE.md)
+[Paper workflow](standalone/README.md#paper-workflow) · [PDC molecular dynamics guide](standalone/PDC-MD-GUIDE.md)
 
 ## Gallery
 
-[Rotation demo](docs/gallery.md#视角演示) · [Modeling and measurement](docs/gallery.md#建模--modeling) · [Calculation and analysis](docs/gallery.md#计算与分析) · [Project library and report](docs/gallery.md#项目与报告)
+[Hydration assembly](docs/gallery.md#hydration-assembly) · [Calculation and analysis](docs/gallery.md#calculation-and-analysis) · [Project library and report](docs/gallery.md#project-outputs)
 
 ## Getting started
 
@@ -119,7 +119,7 @@ The molecular paper workflow can extract methods, basis sets, molecular settings
    .\Install-ChatDFT.ps1
    ```
 
-3. Configure SSH and the server’s PySCF Python path under **计算 → 连接与模型设置**.
+3. Configure SSH and the server’s PySCF Python path in the calculation menu’s connection and model settings.
 
 [Water dimer walkthrough](docs/examples/water-dimer/) · [Open the 186-atom project](#complex-system-demos)
 
@@ -133,4 +133,4 @@ The molecular paper workflow can extract methods, basis sets, molecular settings
 | [Releases](https://github.com/shaoyinzi654-source/ChatDFT/releases) | Windows packages and release history |
 | [Issues](https://github.com/shaoyinzi654-source/ChatDFT/issues) | Report a problem with its version, steps, and relevant error |
 
-[Source](standalone/) · [Website](https://chatdft.com/) · [License](LICENSE) · [Third-party notices](standalone/OPEN_SOURCE.md) · [Browser archive](legacy/browser/)
+[Source](standalone/) · [Website](https://chatdft.com/) · [License](LICENSE) · [Third-party notices](standalone/THIRD_PARTY_NOTICES.en.md) · [Browser archive source](legacy/browser/)

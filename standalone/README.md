@@ -1,114 +1,49 @@
-# ChatDFT 独立工作台 5.8.0
+# ChatDFT Standalone Workbench 5.8.0
 
-ChatDFT 是独立的 Windows 分子计算应用，提供三维结构预览、AI 分子设计、PySCF 服务器计算和结果分析。应用可直接读取磁盘上的 XYZ 和非周期 XSD 结构文件。
+ChatDFT is a Windows application for molecular modeling, remote PySCF jobs, and result review. It supports nonperiodic XYZ and XSD input, SMILES-driven model building, structure comparison, and local job archives.
 
-## 项目库和 AI 分析
+## Installation
 
-在 **文件 → 项目库** 查看本机已知的历史计算和保存的模型。选中一行后，可恢复该项目的结构和计算结果、载入初始结构，或打开它的独立文件夹。AI 生成的模型会自动保存。需要保存手动建模的阶段性版本时，可用 **AI → 保存当前模型到项目库**。未提交的全自动模型可以从项目库恢复并继续。
+Install 64-bit Python 3.13. Download the complete Windows ZIP from Releases, extract it, and run the installer from the extracted folder.
 
-全自动计算完成后，基础数据与图件先归档。当前所选 AI 根据该作业的数据和研究要求选择补充图、撰写分析报告。报告和 PNG、SVG 图件按版本存入作业目录的 `输出/AI分析`。分析结束后会发送桌面提醒。历史全自动作业可在项目库选择 **生成 AI 分析**，查看已有版本可点 **查看 AI 报告**。如果 AI 请求失败，已归档的计算结果仍可用。
+```powershell
+.\Install-ChatDFT.ps1
+```
 
-## 一句话建模
+The installer prepares the Python environment, configures the native launcher, and adds desktop and Start menu shortcuts. Pass `-Python` to select an existing compatible environment. If you move the installation, run the installer again. Projects, results, and settings are stored under `%LOCALAPPDATA%\ChatDFT-Studio`.
 
-在 **AI → 全自动案例** 可选 PDC–镁水合簇、尿素水合簇、CO₂–乙醇胺水合簇。选择后按 **Ctrl+Enter**。也可直接输入以「全自动」开头的要求。全自动模式会验证结构、提交一次非周期 PySCF 计算并持续同步，省略计算参数时使用 B3LYP/6-31G(d) 气相单点能。首次提交或应用重开时，需要连接一次 SSH。取消登录后可通过 **AI → 连接 / 继续全自动任务** 继续。提交前可结束建模，提交后可在作业列表取消作业。
+## Model and compare structures
 
-通过 **AI → 打开全自动输出** 浏览所选作业的分析报告、项目、XYZ、CSV 和 PNG / SVG 图件。报告自动核对收敛状态、几何 RMSD 和可重测的距离约束。图件包含结构图与有数据的 SCF 能量、原子电荷、轨道能级、振动频率或激发态。作业目录还保存原始 PySCF 输入、结果 JSON、日志和可用检查点。失败或取消的作业输出初始结构、可用日志与状态报告。
+- Import XYZ or nonperiodic XSD, or use SMILES to construct a starting conformer with RDKit.
+- Inspect and edit atom positions in ångströms, add or remove atoms, and specify charge and spin multiplicity.
+- Switch among ball-and-stick, sticks, wireframe, and space-filling views. Drag to rotate, use the wheel to zoom, and use the middle button or Shift while dragging to pan.
+- Measure distances, angles, and dihedrals. Pin a separate reference structure for comparison, or let it follow the active model. To compute the reference structure, make it the primary model first.
+- Save the model and calculation settings in a `.chatdft.json` project. Export coordinates as XYZ or save a PNG of the structure view.
 
-打开 **AI → 一句话建模**，在 AI 面板使用 **直接建模**，输入结构要求后按 **Ctrl+Enter** 或点击 **生成三维结构**。可以点 **建模示例** 填入这段描述：
+Layouts include a single model, two structure views, a four-panel analysis workspace, and tabbed documents. Panels can be docked, grouped, or floated. A selected historical job may have a different structure from the active model. Check the title of each document for its source.
 
-> 新建一个非周期簇：2 个苯分子平行堆叠，环平面相距 3.5 Å，在周围摆放 6 个水分子、1 个 Na⁺、1 个 Cl⁻。总电荷 0，单重态。保留每个分子的内部键，直接生成三维结构。
+## PySCF server and jobs
 
-描述可写明组分、数量、形式电荷、总电荷和自旋。可要求紧凑三维排布、近似平面分子堆叠、指定原子之间的距离，或保留已有模型的坐标后追加组分。附加要求如「填入气相 HF/STO-3G 单点计算参数」会在结构校验成功后一起填写到计算面板。实际计算通过现有提交入口运行。
+In the calculation menu, open connection and model settings. Enter the SSH host, port, username, trusted SHA256 host fingerprint, and work directory. Provide a password for the session or configure a private key. The remote environment needs PySCF, and the client needs the path to that environment's Python executable.
 
-软件在本机生成构象和排布，并核对总原子数、组分、重叠、电荷及电子数与多重度是否匹配。项目保存组分、配方和生成坐标。当前可生成最多 48 个分子或离子片段、500 个含氢原子的有限结构。堆叠和原子间距定义初始几何。下一步的优化会按所选计算方法改变这些距离。周期溶液使用专门的 GROMACS 工作流。
+Choose a method, basis, task, solvent, charge, and multiplicity. Supported tasks include single-point energy, geometry optimization, harmonic frequencies, optimization plus frequencies, and vertical excitations. Gas phase and IEF-PCM are available for compatible tasks. MP2 is limited to gas-phase single points. Import external DOS, band, and NEB curves from CSV when you have results from those calculations.
 
-信息不足或几何无法校验时，AI 会提出问题。把答复填在同一个输入框，点击 **回答并继续**。建模过程中可点 **结束建模**，结束会话并保留当前模型。
+The job monitor shows status and available values. Open server job management to inspect queues, CPU, memory, disk use, and logs. You can cancel jobs, retry failed molecular jobs with their saved inputs, and download completed output. The project library can reopen the initial and final structures, job folder, and saved reports.
 
-切换主模型时，三维视图、坐标表、属性、计算输入和 AI 上下文会重新对应。结构对照默认跟随当前主模型，也可手动固定对照。通过 **窗口 → 恢复自动对照** 重新跟随。直接建模可引用选中的对照结构，生成结果载入主模型。计算输入始终标明提交所用的主模型。撤销和重做会恢复结构及对应的计算设置。切换 Codex/API 时各自记住模型 ID。
+## AI modeling and automated runs
 
-再次打开桌面快捷方式会激活已有的同版本窗口。
+Choose local Codex or a compatible API in model settings. The connection test sends a real model request. You can request a structure, geometry edit, or calculation setup separately, or use automated calculation mode to build and validate a model before submitting a job. If a parameter is ambiguous, answer the assistant's follow-up in the same session.
 
-## 开源桌面界面框架
+For a multi-fragment request, specify components, quantities, formal charges, overall charge, spin, and any placement constraints. The local assembly checks atom count, overlap, charge, and spin compatibility. It can prepare up to 48 fragments and 500 atoms including hydrogen. Specified distances describe the starting geometry. Optimization may subsequently change them.
 
-这一版接入真正的 **Qt Advanced Docking System**（PySide6-QtAds），使用其停靠窗口、标签、浮动窗口、拖动分组和布局保存功能；工具图标使用 **QtAwesome**。整体布局参考 Avogadro、ParaView 和 FreeCAD。准确的复用范围与许可证见 [OPEN_SOURCE.md](OPEN_SOURCE.md)，软件的 **帮助 → 界面来源与开源许可** 也可打开该文件。
+Completed automated jobs retain the input, returned data, base figures, and report. Supplemental AI analysis uses available job data, saves a separate version, and can notify you when it finishes. [Automated calculation workflow](../docs/workflow.md)
 
-## 启动和布局
+## Paper workflow
 
-双击桌面 **ChatDFT**。顶部采用两排紧凑工具栏，常用的导入、保存、结构编辑、视图操作、计算提交和项目管理命令在固定位置。
+Open the paper workflow in the AI menu. You can import PDF, TXT, or Markdown, or paste text from a paper and its supplement. PDF extraction uses `pdftotext` on PATH. Scanned documents require OCR first.
 
-- **工作台** 下拉框切换分子建模、量子计算和结果分析。计算输入区标注正在使用的主模型。
-- 右上角提供 **单文档 / 双结构对照 / 四视图分析 / 文档标签**。单文档用于大幅预览，双结构用于比较，四视图同时显示结构与结果，文档标签将四个视图合并到同一组。
-- 拖动文档或面板的标签可重新停靠、组合标签、拆分或浮动到独立窗口。使用标题栏菜单、浮动和关闭按钮管理面板。
-- **窗口** 菜单可重新打开关闭的文档与面板；**恢复默认布局** 回到四视图工作台。
-- 关闭软件时保存窗口位置和停靠布局，下次启动恢复。布局存于本机用户数据目录，与 `.chatdft.json` 项目文件分别保存。
-- **AI 助手** 按钮或顶部 **AI** 菜单打开 AI 面板，提供结构设计、候选结构及参数建议。
+Check the extracted method, basis, solvent, charge, spin, and page references against the paper. Load the authors' coordinates or the supplied structure file where available. An approximate structure built from SMILES can serve as a starting point if original coordinates are unavailable. The molecular workflow checks the chosen settings before submitting to PySCF. Where the original energy is available and directly comparable, the application can record an explicit comparison.
 
-主模型和对照模型的旋转、平移、样式、标签和测量分别生效。局部工具栏控制所属的活动文档。**计算使用主模型**，要计算对照结构，先点对照窗口的 **设为主模型**。
+For periodic PDC solutions use the separate GROMACS workflow for prepared boxes, trajectory analysis, and aggregation statistics. [PDC molecular dynamics](PDC-MD-GUIDE.md)
 
-四视图中的能量和电荷来自所选计算作业。当前主模型与所选历史作业可以不同，文档标题分别标注其来源。导入 2–5 列 CSV 可查看外部 DOS、光谱等曲线并导出 PNG。DOS、能带和 NEB 当前通过外部结果导入，PDC 分子动力学使用单独的 GROMACS 工作流。
-
-## ChatDFT 分子工作区
-
-- **文件 → 导入结构** 支持非周期 XYZ 和 XSD 文件。
-- **构建 → 从 SMILES 建模** 生成三维分子。分子库包含水、苯、乙醇、吡啶、苯酚、咖啡因及分子复合物。
-- **编辑 → 原子坐标** 支持编辑元素与坐标、增删原子、设置电荷与自旋。
-- **撤销 / 重做** 保存最近 30 次结构编辑记录。
-- 工具栏支持球棍、棍状、线框和空间填充。拖动旋转、滚轮缩放，中键或 Shift 拖动平移。
-- **视图** 提供距离、角度和二面角测量、原子编号、标准视角与浅色背景。
-- **构建 → 设置几何优化** 打开 PySCF 几何优化设置。确认方法与基组后提交到计算服务器。
-- 在作业的结果页选择 **载入结果结构**，可以直接查看结构、保存项目或导出 XYZ。
-
-RDKit 根据 SMILES 生成初始构象。几何优化由 PySCF 服务器执行。
-
-## 项目与导出
-
-通过 **文件 → 保存项目** 保存结构和计算参数为 `.chatdft.json`，再通过 **打开 ChatDFT 项目** 恢复。项目只保存结构及计算设置。
-
-**文件 → 导出** 提供 XYZ 坐标、PNG 结构视图、所选任务的 CSV 结果表和 Markdown 计算报告。
-
-## AI 与服务器
-
-**AI 助手** 默认使用本机已登录的 Codex。首次使用 5.1 版会展开面板，之后保留用户保存的显示状态。顶部按钮和 **AI** 菜单可随时重新打开。
-
-打开 **AI → 选择模型与设置…**，可从本机 Codex 返回的列表中选择模型，也可直接输入模型 ID。选择 **Codex 默认模型** 会让 Codex 决定使用哪个模型。保存后，下一次发送和 **测试 AI** 会使用所选设置。
-
-自动查找 Codex 时优先使用桌面版随附的程序，并通过已安装的应用包定位新版路径。手动填写的 Codex 程序路径优先于自动查找。**刷新模型** 会从当前选用的程序读取列表，鼠标停留在列表下方的状态文字上可查看程序路径。
-
-在 **AI → 论文复刻…** 导入 PDF、TXT 或 Markdown，也可粘贴论文和补充材料文字。PDF 页码使用文件中的物理页序，读取依赖本机 PATH 上的 `pdftotext`。扫描件需先 OCR。可指定相关页与要核对的计算，点击 **提取复刻方案** 将所选文字发送给当前模型检查。
-
-在 **复刻方案** 中核对方法、基组、溶剂、电荷、自旋及原文页码。可使用原文 Å 坐标或导入补充材料的 XYZ/XSD。缺原始几何时，勾选近似几何可从原文 SMILES 构建起始结构。**准备并提交…** 加载结构和参数，再进入现有服务器确认窗口。论文条件受当前分子 PySCF 接口约束，周期体系、未支持的方法或缺关键出处的任务会提示补充。已完成作业可与有原文依据的 Hartree 电子能对照，方案、结构与对照结果可导出 JSON。
-
-1. 切到 **对话与候选** 可查看候选和方法建议。**设计结构 / 修改结构 / 计算方案** 会填入请求模板，补充要求后点 **发送**，或按 **Ctrl+Enter**。
-2. 在 **候选结构** 页选中候选，点 **用于计算**，软件校验 SMILES、自旋和三维坐标并载入主模型。
-3. 点 **应用建议参数**，整体校验并填写受当前 PySCF 接口支持的方法、基组、任务和溶剂；不支持的组合不会部分填写。
-4. 选中作业后用 **AI → 解读所选计算结果**，将该作业的实际结果交给 AI。模型视图与所选作业不同的情况需要按文档标题核对。
-
-**测试 AI** 会发送一条实际请求，收到有效结构化回复后显示实测时间。此测试不提交计算作业。生成中、成功和错误状态都显示在 AI 面板内；网络或接口失败后可重试。失败请求会清除旧候选和旧建议的可用状态，主模型及已填写参数保留。
-
-
-**计算 → 连接与模型设置** 可切换兼容 API。提问时，对话和相应结构或计算结果会发送给所配置的 AI。AI 结构候选经过校验后生成三维模型。
-
-在 **计算 → 连接与模型设置** 填写自己的 SSH 主机、端口、用户名和可信 SHA256 主机指纹。可以使用会话内密码或私钥。服务器需准备 PySCF 环境与独立的 ChatDFT 工作目录。
-
-服务器资源暂忙时，量子作业显示为 **排队中**，可以同步状态或取消。资源充足的 16 核服务器允许一个小型 PySCF 作业和一个标准 MD 盒同时运行，小型量子作业最多使用 4 核，实际核数会显示在作业结果中。历史失败作业可以从 **计算 → 重试所选失败任务…** 使用原结构和计算参数重新提交。
-
-打开 **计算 → 服务器作业管理…**，可在同一窗口查看服务器上的 PySCF 和 GROMACS 作业、CPU／内存／磁盘使用情况、模拟进度和日志。窗口可按状态、引擎和编号筛选，打开时每 8 秒自动同步。可取消排队或运行中的作业，续跑已停止的 MD、重试失败的量子作业，以及下载结果或完整 XTC 轨迹到本地项目。使用当前工作台的 SSH 连接设置，已登录的会话可直接进入。
-
-ChatDFT 的 PySCF 计算支持非周期分子的单点、优化、频率和垂直激发态。溶剂使用 IEF-PCM。MP2 支持气相单点。分子 PySCF 任务使用有限分子或团簇。5.3 新增的 GROMACS 工作流单独支持 PDC 周期溶液分子动力学。
-
-底部 **作业与输出** 显示任务状态。选中任务后，右侧 **结果** 显示数值与单位，底部提供报告、SCF 能量、频率与激发态和日志。结果可以导出、交给 AI 解读或载入结果几何。
-
-## 安装及迁移
-
-在 Windows 上解压完整安装包。安装 64 位 Python 3.13 后，从解压目录运行 `Install-ChatDFT.ps1`。安装器会安装桌面依赖，配置 `ChatDFT.exe` 并创建桌面和开始菜单快捷方式。可用 `-Python` 指定已经准备好依赖的 Python 环境。
-
-双击桌面的 **ChatDFT** 启动。移动应用目录或 Python 环境后重新运行安装器。设置、已保存项目、作业和报告沿用 `%LOCALAPPDATA%\ChatDFT-Studio`。
-
-
-## 5.3 · PDC 论文分子动力学
-
-随包提供 21 套已校验的初始周期盒。使用 **AI → 填入 PDC 论文复刻提示词** 并执行，或在论文导入页点击 **复刻并查看 21 套周期模型**，会直接进入 **周期结构** 页。周期结构使用与主视图相同的三维显示，可切换球棍、棍状、线框和空间填充，也可单独控制周期边框、水氧和氢原子。作业监视器提供模拟提交入口。
-
-**AI → PDC 溶液 MD 复刻…** 支持从自行取得的原始参数准备 21 个体系，并提供周期溶液建模、SPC/E、12-6 / 12-6-4、SSH 排队、取消与检查点继续、轨迹导入、Rc / Mc 聚集统计、SDF Cube、温压能量曲线和当前模型 AI 审查。完整说明及参数差异见 [PDC MD 使用指南](PDC-MD-GUIDE.md)。
-
-文献重建参数和原作者表格势存在未核对的差异；100 ns 论文生产计算需实际运行后才能判断结论。短程验证不会被标记为论文复刻成功。
+[Repository home](../README.md) · [License](LICENSE) · [Third-party notices](THIRD_PARTY_NOTICES.en.md)

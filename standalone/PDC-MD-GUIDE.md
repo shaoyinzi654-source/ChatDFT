@@ -1,41 +1,32 @@
-# PDC 论文复刻工作流 · ChatDFT 5.4.5
+# PDC molecular dynamics workflow
 
-## 获取研究参数
+The periodic PDC workflow in ChatDFT prepares GROMACS input, previews initial boxes, manages remote jobs, and analyzes trajectories. It is designed around the PDC aggregation study by Li and Van Lehn. [Paper](https://doi.org/10.1021/acsomega.4c05431) · [Supplement](https://ndownloader.figshare.com/files/49285305)
 
-公开安装包提供工作流程。要准备该论文的计算，请从 [作者的固定版本](https://github.com/jlianl/PDC_Aggregation/tree/fb868ea2646ecf98aa4faed389a5ef64528069a5) 获取原始参数。把含有 `PDC_neutral`、`PDC1_Monovalent` 等目录的仓库根目录放到 `runtime/assets/pdc2024`，然后重启工作台。从体系列表选择并生成计算输入。预建周期盒归档单独管理。
+## Prepare input
 
-入口为 **AI → PDC 溶液 MD 复刻…**，也可从论文复刻窗口进入。此工作流面向 Li / Van Lehn 2024 的 PDC 溶液聚集论文，不自动把任意论文转换为可用力场。
+1. Obtain the [authors’ original parameters at the pinned revision](https://github.com/jlianl/PDC_Aggregation/tree/fb868ea2646ecf98aa4faed389a5ef64528069a5). Place the source directory containing `PDC_neutral` and `PDC1_Monovalent` under `runtime/assets/pdc2024` and restart ChatDFT.
+2. Open the PDC molecular dynamics tool in the AI menu and select a system. The workflow covers neutral PDC and singly or doubly deprotonated PDC with the supported monovalent and divalent counterions.
+3. Start with a short verification run. The paper workflow uses 100 PDC molecules, a 6 nm initial cubic box, 293.15 K, 1 bar, 2 ns equilibration, and 100 ns production. Inspect the prepared files and simulation parameters before submission.
+4. Review the provenance of the 12-6-4 ion parameters for the divalent cases. ChatDFT's literature reconstruction transfers published SPC/E kappa values to other atom-type pairs. The authors' original tabulated potentials were unavailable. Use compatible GROMACS settings for tabulated interactions.
+5. Check the configured server engine and submit. Monitor stages and warnings. An interrupted run can resume from an available GROMACS checkpoint.
 
-已有单独提供的 `pdc-paper-models.zip` 时，可放到 `runtime/assets`，用 **载入论文的 21 套周期模型** 打开预建周期盒。使用原始参数自行生成时，从 **建模与运行** 选择体系并准备输入。预览时可用下拉框切换体系，拖动旋转、按住 Shift 拖动平移、滚轮缩放。作业监视器可用 **提交已准备任务…** 提交选中的体系。正式生产模拟使用 2 ns 平衡后产生的检查点继续。
+A separately supplied `pdc-paper-models.zip` can be placed in `runtime/assets` to preview the prepared boxes offline. The workbench can rotate the box and toggle the cell, water, and hydrogen display.
 
-## 使用
+## Analyze results
 
-1. 在“建模与运行”选择体系。Ctrl / Shift 可多选，共 21 个：中性 PDC，PDC⁻ / PDC²⁻ 与 Li、Na、K、Rb、Cs、Be、Mg、Ca、Sr、Ba。
-2. 初次先选“短程功能验证”。论文参数为 100 个 PDC、初始 6 nm 立方盒、293.15 K、1 bar、2 ns 平衡加 100 ns 生产。平衡采用 V-rescale / Berendsen，生产采用 Nose–Hoover / Parrinello–Rahman。默认 2 fs；遇到实际数值不稳定应改用 1 fs，重新准备任务。
-3. 二价离子选择文献重建或导入逐类型 kappa JSON。文献重建取 Li & Merz 表 2 的 SPC/E 数值：Be 980、Mg 98.7、Ca 23、Sr 13.7、Ba 7.2 nm⁻²。重建把同一种离子的 kappa 应用于所有 PDC / 水类型，C4 = kappa × C6。**这包含参数迁移假设；原 PDC 作者没有公开原始表格势，不可宣称参数完全相同。** 自有参数可导出模板后填写出处、单位和每个原子类型对。
-4. 点“检查服务器”，确认普通和表格势引擎均可用。准备输入可离线完成；提交复用已有 SSH 连接和主机指纹检查。密码只在当前会话中使用。服务器一次运行一项 MD；资源充足时，标准大小的 MD 可以与一个限核的小型 PySCF 任务同时运行。
-5. 在“作业监视器”同步状态，查看实际溶剂数量、命令和错误。取消会请求 GROMACS 正常停止、保留检查点；已停止任务可继续。检查点未生成时从当前阶段起点重跑。预处理仅允许与正文 tau-t = tau-p = 2 ps 对应的特定共振警告，其他警告 / 错误不会自动忽略。
-6. 下载结果，按需下载轨迹。轨迹分析页可看聚集数、Rc / Mc、温度 / 压力 / 势能 / 密度，导入论文两列 CSV 作原始数值对照。CSV 第一行为表头，后续为横坐标和概率；请先统一分箱及概率质量 / 概率密度含义。
-7. SDF 导出 PDC 原子、水氧、离子数密度的 Cube 和 NumPy 网格，单位 particles/nm³。界面显示可旋转的边界体素表面；Cube 可在 VMD / ParaView 等软件进一步显示。
-8. “AI 审查结果”使用当前 Codex / API 模型，发送该任务的参数、统计、温压能量摘要和日志片段。输出保存为 `ai-review.json`。它不替代实际计算，也不自动改写结果。
+- Download the simulation output and trajectory when needed. Preserve the run manifest, topology, command logs, MDP files, coordinates, and available checkpoints.
+- Match atom count, residue and atom order, water, ions, box vectors, and time when importing a trajectory.
+- Inspect aggregation and parallel alignment, temperature, pressure, energy, and density. Confirm units, time cutoffs, normalization, and histogram bins before comparing with published results.
+- Export spatial distribution grids as Cube or NumPy arrays. The workflow can optionally save a separate AI review of selected parameters, summaries, and log excerpts.
 
-## 数据和分析约定
+## Reproduction details
 
-作者拓扑 / 参数文件保留原样，生成输入另存于 `%LOCALAPPDATA%/ChatDFT-Studio/md-jobs/<任务号>/`。原始坐标未公开，因此以作者键连接和固定随机种子重建。使用正文报告的刚性 SPC/E 水，并记录作者部分水文件与正文不一致的问题。二价体系中的 OW 交叉 LJ 显式采用 Lorentz–Berthelot 混合。
+- The 21 systems comprise neutral PDC plus each combination of singly or doubly deprotonated PDC with Li, Na, K, Rb, Cs, Be, Mg, Ca, Sr, or Ba. Equilibration uses V-rescale and Berendsen coupling. Production uses Nose–Hoover and Parrinello–Rahman coupling. The standard timestep is 2 fs. Consider 1 fs and regenerate the inputs if 2 fs produces numerical instability.
+- The reconstruction uses the authors’ bond connectivity, a fixed random seed, and rigid SPC/E water. For Be, Mg, Ca, Sr, and Ba the transferred kappa values are 980, 98.7, 23, 13.7, and 7.2 nm⁻², respectively. The reconstruction uses C4 = kappa × C6 and Lorentz–Berthelot mixing for water oxygen cross terms. Alternatively, supply a per-type kappa JSON with units and provenance. [Li and Merz parameter source](https://pmc.ncbi.nlm.nih.gov/articles/PMC3960013/)
+- The GROMACS 2018.8 user-table workflow uses group cutoffs. The paper reports Verlet. Nonbonded tables are shifted at 1.2 nm, extend to 3 nm, and include the 12-6-4 potential and its analytical negative derivative. The 1–4 table retains ordinary unshifted LJ terms. [GROMACS cutoff support](https://manual.gromacs.org/2018/user-guide/cutoff-schemes.html)
+- Aggregation uses connected components of contacts within 0.31 nm under the minimum-image convention. A parallel edge additionally requires an acute angle of at most 20° between the C8/C9/C10 ring-plane normals. The implementation uses Rc = Nc/Lp and Mc = Nc × F(Nc), where F counts parallel clusters of the same size within a sampled frame. An aggregate without a multi-molecule parallel cluster contributes a zero record. Default analysis windows start at 20 ns for neutral and monovalent systems and 30 ns for divalent systems. Histogram outputs are unsmoothed.
+- Density grids use particles/nm³. Compare the zero convention, bins, and normalization before interpreting differences from the paper. Check the run manifest for input hashes, actual molecule counts, engine version, commands, and preprocessing warnings.
 
-GROMACS 2018.8 的用户非键表格势需要 group 截断；正文报告 Verlet，两者有差异。生成表格为七列，包含完整 12-6-4 势及解析负导数，非键势在 1.2 nm 处平移，1–4 表保持未平移的普通 LJ。表延伸至 3 nm，以满足旧引擎的表长度要求。为按原子类型施加表格，水电荷组拆为逐原子；邻居列表每步更新。
+The short verification run checks the software workflow. Full reproduction requires production trajectories, equilibration checks, and comparison against the published distributions.
 
-聚集判据为任意 PDC 原子间周期最小距离 ≤ 0.31 nm；平行连接还要求 C8 / C9 / C10 环面法向锐角 ≤ 20°，采用无向连通分量。Rc = Nc / Lp；Mc = Nc × F(Nc)，F 在同一采样帧统计相同大小的平行簇。无多分子平行簇的聚集体贡献一个 Rc = Mc = 0 的记录。默认稳定区间为单价 / 中性 20 ns 后、二价 30 ns 后。直方图不做高斯过程平滑；零值约定、分箱和 SDF 归一化还需与作者分析脚本核对。
-
-短程模式只检查软件和计算链路；完整论文复刻需要实际完成足够长的生产轨迹、检验平衡，并与论文数据比较。软件不会把短程模式报告为论文复刻成功。长轨迹运行时间应以实际 GROMACS 日志的 ns/day 为准。
-
-每个任务保存输入 manifest、源文件 SHA256、固定仓库提交、实际体系数量、解析后的 MDP、命令日志、引擎版本及预处理警告记录。下载后的运行包还包含实际溶剂化拓扑、坐标、TPR、EDR 和可用检查点。导入外部轨迹时核对原子数量、PDC 残基 / 原子顺序、水和离子顺序、周期盒及时间。
-
-## 来源
-
-- [Li / Van Lehn 2024 正文](https://doi.org/10.1021/acsomega.4c05431)，[官方补充材料](https://ndownloader.figshare.com/files/49285305)。
-- [作者参数仓库](https://github.com/jlianl/PDC_Aggregation/tree/fb868ea2646ecf98aa4faed389a5ef64528069a5)，固定提交 `fb868ea2646ecf98aa4faed389a5ef64528069a5`。
-- [Li / Merz 12-6-4 原始方法与 SPC/E 参数](https://pmc.ncbi.nlm.nih.gov/articles/PMC3960013/)，DOI 10.1021/ct400751u，式 4、表 2。
-- [GROMACS 2018 截断方案支持表](https://manual.gromacs.org/2018/user-guide/cutoff-schemes.html)。
-
-服务器已安装 GROMACS 2021.4 和 2018.8。迁移时可参考 `server/install-md.sh`，使用已有 `/opt/chatdft/venv`。服务器无法下载旧版压缩包时可手工上传同名文件，安装脚本校验 SHA256；本包不包含 GROMACS 二进制。
+[Workbench manual](README.md) · [Repository home](../README.md)
