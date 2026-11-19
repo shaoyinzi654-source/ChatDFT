@@ -1,24 +1,21 @@
-ChatDFT 个人与商业许可 / Personal and Commercial License
-适用版本 / Effective version: 5.9.0
-© 2026 Yinzi Shao
+MIT License
 
-1. 适用范围
-本许可适用于权利人在 ChatDFT 5.9.0 及后续版本中以本许可发布的自研新增内容及其版本发行。此前以 MIT 发布的代码及材料继续遵循相应版本的 MIT 许可。保留的 MIT 文本见 LICENSE-MIT-5.8.txt。第三方组件、字体、数据和独立材料依各自随附的许可使用。
+Copyright (c) 2026 ChatDFT Contributors
 
-2. 个人非商业使用
-自然人可免费在自己的设备上安装和使用本许可涵盖的 ChatDFT 版本，用于个人学习、个人研究及其他非商业活动。为上述目的可修改个人副本。为雇主、客户或商业组织开展业务的使用需要商业授权。
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-3. 商业授权
-在商业组织业务中使用、提供收费计算或咨询服务、将软件嵌入商业产品或以其他营利方式使用本许可涵盖的新增内容，须事先购买权利人的书面商业授权。可通过 ChatDFT 官方发布渠道联系权利人。费用、使用范围及期限以书面许可为准。
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-4. 分发与计算输出
-如需分发、托管或转售本许可涵盖的新增内容，须取得权利人的书面许可。用户对合法输入和独立计算输出所拥有的权利由其自身来源和适用法律决定。本许可不改变此前 MIT 许可和第三方条款已授予的权利。
-
-5. 软件按现状提供
-在适用法律允许的范围内，权利人不就软件适销性、特定用途适用性或计算结果的准确性提供保证。
-
-1. Scope. These terms apply to new original material released by the rights holder under this license in ChatDFT 5.9.0 and later versions, and to distribution of that edition. Previously MIT-licensed material remains available under its applicable MIT terms, retained in LICENSE-MIT-5.8.txt. Third-party components and materials remain under their respective licenses.
-2. Personal use. Individuals may install and use this edition free of charge for personal, noncommercial learning, research, and similar activities. Individuals may modify their own copies for those purposes.
-3. Commercial use. Use for an employer, client, commercial operation, paid service, or commercial product requires a paid written commercial license before use. Contact the rights holder through the official ChatDFT distribution channel. Pricing, scope, and duration are set by the written agreement.
-4. Distribution and output. Written permission is required to distribute, host, or resell the newly licensed material. Rights in lawful inputs and independent outputs are determined by their own sources and applicable law. Earlier MIT grants and third-party rights remain in effect.
-5. Warranty. The software is provided as is, to the extent permitted by law.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

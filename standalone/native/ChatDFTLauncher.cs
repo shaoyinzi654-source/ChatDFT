@@ -8,8 +8,8 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyDescription("ChatDFT 材料与分子计算工作台")]
 [assembly: AssemblyCompany("ChatDFT")]
 [assembly: AssemblyProduct("ChatDFT")]
-[assembly: AssemblyVersion("5.9.0.0")]
-[assembly: AssemblyFileVersion("5.9.0.0")]
+[assembly: AssemblyVersion("5.8.0.0")]
+[assembly: AssemblyFileVersion("5.8.0.0")]
 
 internal static class ChatDFTLauncher
 {

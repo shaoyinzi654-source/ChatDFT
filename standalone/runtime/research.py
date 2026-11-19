@@ -253,8 +253,6 @@ class ResearchPanel(Panel):
         action.triggered.connect(self.import_curve)
         action = tools.addAction(symbol_icon('save'), '导出图像')
         action.triggered.connect(self.export_curve_image)
-        action = tools.addAction(symbol_icon('save'), '绘图模板库')
-        action.triggered.connect(self.open_plot_templates)
         v.addWidget(tools)
         self.data_plot = DataPlot()
         v.addWidget(self.data_plot, 1)
@@ -364,7 +362,6 @@ class ResearchPanel(Panel):
         for dock in (self.project_dock, self.inspector, self.activity_dock):
             windows.addAction(dock.toggleViewAction())
         analysis = self.menuBar().addMenu('数据分析')
-        self.menu_action(analysis, '绘图模板库…', self.open_plot_templates)
         self.menu_action(analysis, '导入 CSV 曲线…', self.import_curve)
         self.menu_action(analysis, '导出曲线图像…', self.export_curve_image)
         modules = analysis.addMenu('扩展计算模块')
@@ -375,12 +372,6 @@ class ResearchPanel(Panel):
     def choose_task(self, title):
         self.task.setCurrentText(title)
         self.tabs.setCurrentIndex(1)
-
-    def add_jobs_tab(self):
-        super().add_jobs_tab()
-        button = QPushButton('绘图模板库')
-        button.clicked.connect(self.open_plot_templates)
-        self.result_grid.parentWidget().layout().addWidget(button)
 
     def pin_reference(self):
         try:
@@ -434,19 +425,6 @@ class ResearchPanel(Panel):
                 self.status.setText(f'已导入 {len(rows)} 个数据点，{len(headers)-1} 条曲线。')
             except (OSError, ValueError, UnicodeError) as exc:
                 self.show_error(exc)
-
-    def open_plot_templates(self):
-        from plot_gallery import PlotGallery
-
-        job = self.current_job()
-        result = None
-        if job:
-            try:
-                result = self.read_result(job)
-            except (OSError, ValueError, UnicodeError) as exc:
-                self.status.setText(str(exc))
-        curve = (self.data_plot.headers, self.data_plot.rows) if self.data_plot.rows else None
-        PlotGallery(self, result if isinstance(result, dict) else None, curve).exec()
 
     def export_curve_image(self):
         path, _ = QFileDialog.getSaveFileName(self, '导出曲线图像', 'curve.png', 'PNG (*.png)')

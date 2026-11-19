@@ -1,10 +1,8 @@
 [![ChatDFT Windows 分子建模与量子化学工作台。右侧为从项目坐标渲染的 186 原子 PDC–镁显式水组装。](docs/images/chatdft-cover-zh.webp)](#复杂体系演示)
 
-**[下载 Windows 5.9.0](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.9.0-standalone/ChatDFT-Standalone-5.9.0-Windows.zip)** · [打开演示](#复杂体系演示) · [看实算结果](#实算案例) · [使用文档](#文档与支持) · [English](README.en.md)
+**[下载 Windows 5.8.0](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip)** · [打开演示](#复杂体系演示) · [看实算结果](#实算案例) · [使用文档](#文档与支持) · [English](README.en.md)
 
 导入或组装分子，经 SSH 提交 PySCF 作业，查看并归档结构、数值、图件与报告。
-
-**5.9.0 新增绘图模板库。** 21 种图型和 5 套主题，可从当前作业、PySCF 结果 JSON 或 CSV 预览和导出图件。个人非商业使用免费，商业使用需购买书面授权。 [绘图说明](standalone/README.md#绘图模板库) · [新版许可](LICENSE) · [先前 MIT 条款](LICENSE-MIT-5.8.txt)
 
 ## 复杂体系演示
 
@@ -114,7 +112,7 @@
 
 ## 安装与上手
 
-1. 安装 **64 位 Python 3.13**，下载并解压 [Windows 5.9.0 ZIP](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.9.0-standalone/ChatDFT-Standalone-5.9.0-Windows.zip)。
+1. 安装 **64 位 Python 3.13**，下载并解压 [Windows 5.8.0 ZIP](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip)。
 2. 在解压目录打开 PowerShell，运行下列命令，然后打开桌面的 **ChatDFT** 快捷方式。
 
    ```powershell

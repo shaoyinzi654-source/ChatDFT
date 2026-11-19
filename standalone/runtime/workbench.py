@@ -6,7 +6,7 @@ from PySide6.QtGui import QAction, QColor, QDesktopServices, QPixmap
 from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QDialogButtonBox, QHeaderView, QLabel, QTabBar, QToolBar,
-    QPlainTextEdit, QTableWidget, QToolButton, QMessageBox, QSizePolicy, QVBoxLayout, QWidget,
+    QTableWidget, QToolButton, QMessageBox, QSizePolicy, QVBoxLayout, QWidget,
 )
 
 from studio import StudioWindow
@@ -265,7 +265,6 @@ class WorkbenchWindow(WorkbenchAI, StudioWindow):
 
     def add_source_information(self):
         menu = self.menuBar().addMenu('帮助')
-        menu.addAction('个人与商业许可', self.show_license)
         menu.addAction('界面来源与开源许可', self.show_sources)
         menu.addAction('使用说明', lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(
             str(Path(__file__).resolve().parent.parent / 'README.md'))))
@@ -296,10 +295,8 @@ class WorkbenchWindow(WorkbenchAI, StudioWindow):
         layout.addWidget(QLabel(f'材料与分子计算工作台 · {version}'))
         layout.addWidget(QLabel('分子建模、PySCF 服务器计算与 AI 结果分析'))
         layout.addWidget(QLabel('© 2026 Yinzi Shao · 保留全部权利'))
-        layout.addWidget(QLabel('个人非商业使用免费 · 商业使用需购买授权'))
+        layout.addWidget(QLabel('CC 4.0 · 具体授权以随附许可声明为准'))
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
-        license_button = buttons.addButton('查看许可', QDialogButtonBox.ActionRole)
-        license_button.clicked.connect(self.show_license)
         buttons.button(QDialogButtonBox.Close).setText('关闭')
         buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)
@@ -313,25 +310,6 @@ class WorkbenchWindow(WorkbenchAI, StudioWindow):
     def show_sources(self):
         QDesktopServices.openUrl(QUrl.fromLocalFile(
             str(Path(__file__).resolve().parent.parent / 'OPEN_SOURCE.md')))
-
-    def show_license(self):
-        license_path = Path(__file__).resolve().parent.parent / 'LICENSE'
-        try:
-            terms = license_path.read_text(encoding='utf-8')
-        except (OSError, UnicodeError) as exc:
-            self.show_error(exc)
-            return
-        dialog = QDialog(self)
-        dialog.setWindowTitle('ChatDFT · 个人与商业许可')
-        dialog.resize(680, 500)
-        layout = QVBoxLayout(dialog)
-        text = QPlainTextEdit(terms)
-        text.setReadOnly(True)
-        layout.addWidget(text)
-        buttons = QDialogButtonBox(QDialogButtonBox.Close)
-        buttons.rejected.connect(dialog.reject)
-        layout.addWidget(buttons)
-        dialog.exec()
 
     def document_activated(self, window):
         if not getattr(self, 'docking_ready', False):

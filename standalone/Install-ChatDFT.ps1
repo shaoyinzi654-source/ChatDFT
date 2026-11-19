@@ -47,7 +47,7 @@ if (-not $NoShortcuts) {
         $shortcut.Arguments = ''
         $shortcut.WorkingDirectory = $PSScriptRoot
         $shortcut.IconLocation = $app + ',0'
-        $shortcut.Description = 'ChatDFT 5.9 independent molecular workbench'
+        $shortcut.Description = 'ChatDFT 5.8 independent molecular workbench'
         $shortcut.Save()
         $saved = $shell.CreateShortcut($path)
         if ($saved.TargetPath -ne $app) { throw "Incorrect shortcut target: $path" }
