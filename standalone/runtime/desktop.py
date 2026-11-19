@@ -11,7 +11,7 @@ REQUESTS = {b'show', b'server-jobs', b'pdc-models', b'pdc-and-server'}
 
 def server_name():
     identity = str(data_dir().resolve()).casefold().encode('utf-8')
-    return 'ChatDFT-Standalone-5.8-' + sha256(identity).hexdigest()[:20]
+    return 'ChatDFT-Standalone-5.9-' + sha256(identity).hexdigest()[:20]
 
 
 def activate_existing(args):

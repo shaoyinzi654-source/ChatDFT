@@ -1305,7 +1305,7 @@ def main():
     args = parser.parse_args()
     app = QApplication([])
     app.setApplicationName('ChatDFT')
-    app.setApplicationVersion('5.8.0')
+    app.setApplicationVersion('5.9.0')
     app.setOrganizationName('ChatDFT')
     from workbench_theme import apply_workbench_theme
     apply_workbench_theme(app)

@@ -1,8 +1,10 @@
 [![ChatDFT, a Windows workbench for molecular modeling and quantum chemistry, with a rendering of the 186-atom PDC–magnesium hydration assembly.](docs/images/chatdft-cover-en.webp)](#complex-system-demos)
 
-**[Download Windows 5.8.0](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip)** · [Open the demo](#complex-system-demos) · [See a completed job](#completed-calculation) · [Documentation](#documentation-and-support) · [中文](README.md)
+**[Download Windows 5.9.0](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.9.0-standalone/ChatDFT-Standalone-5.9.0-Windows.zip)** · [Open the demo](#complex-system-demos) · [See a completed job](#completed-calculation) · [Documentation](#documentation-and-support) · [中文](README.md)
 
 Import or assemble molecules, submit PySCF jobs over SSH, and archive geometries, values, figures, and reports.
+
+**Version 5.9.0 adds a plot template library.** Preview or export 21 chart types in five themes using current job results, PySCF JSON, or CSV. Personal noncommercial use is free. Commercial use requires a paid written license. [Plotting guide](standalone/README.md#绘图模板库) · [License](LICENSE) · [Earlier MIT terms](LICENSE-MIT-5.8.txt)
 
 ## Complex-system demos
 
@@ -112,7 +114,7 @@ The molecular paper workflow can extract methods, basis sets, molecular settings
 
 ## Getting started
 
-1. Install **64-bit Python 3.13**, then download and extract the [Windows 5.8.0 ZIP](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.8.0-standalone/ChatDFT-Standalone-5.8.0-Windows.zip).
+1. Install **64-bit Python 3.13**, then download and extract the [Windows 5.9.0 ZIP](https://github.com/shaoyinzi654-source/ChatDFT/releases/download/v5.9.0-standalone/ChatDFT-Standalone-5.9.0-Windows.zip).
 2. Open PowerShell in the extracted folder and run the installer. Launch **ChatDFT** from the desktop shortcut.
 
    ```powershell
